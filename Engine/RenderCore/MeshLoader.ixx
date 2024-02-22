@@ -20,7 +20,7 @@ import <span>;
 import <map>;
 import <filesystem>;
 
-export enum class EngineMesh { Cube = 0, Quad, Sphere };
+export enum class EngineMesh { Cube = 0, Quad, Sphere, Torus };
 
 export class MeshLoader
 {
@@ -52,6 +52,10 @@ public:
 			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/sphere.obj");
 			CreateMeshBuffersToGPU(meshIDs);
 			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Sphere, static_cast<int>(meshIDs[0])));
+
+			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/torus.obj");
+			CreateMeshBuffersToGPU(meshIDs);
+			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Torus, static_cast<int>(meshIDs[0])));
 		}
 	}
 

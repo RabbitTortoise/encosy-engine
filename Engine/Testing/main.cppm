@@ -103,28 +103,25 @@ void InitializeTestEntities()
 	auto MainRenderPipelineManager = EngineRenderCore->GetRenderPipelineManager();
 
 
-	auto grassID = MainTextureLoader->LoadTexture("Grass_Texture.png");
-	auto rockID = MainTextureLoader->LoadTexture("Rock_Texture.png");
-	auto sandID = MainTextureLoader->LoadTexture("Sand_Texture.png");
-	auto snowID = MainTextureLoader->LoadTexture("Snow_Texture.png");
-	auto waterID = MainTextureLoader->LoadTexture("Water_Texture.png");
+	auto error = MainTextureLoader->GetEngineTextureID(EngineTextures::ErrorCheckerBoard);
+
 
 	TransformComponent tc = {
 	.Position = glm::vec3(0,-2,0),
 	.Scale = glm::vec3(10,10,1),
 	.Orientation = glm::quat(glm::vec3(glm::radians(90.0f),0,0)),
 	};
-	MaterialComponent mc = {
-		.UsedRenderPipeline = MainRenderPipelineManager->GetEngineRenderPipelineID(EngineRenderPipelines::Unlit),
-		.Texture_Albedo = grassID,
-		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Quad)
+	MaterialComponentUnlit mc = {
+		.Diffuse = error,
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Quad),
+		.TextureRepeat = 2.0f
 	};
 	WorldEntityManager->CreateEntityWithData(tc, mc);
 
 	mc = {
-		.UsedRenderPipeline = MainRenderPipelineManager->GetEngineRenderPipelineID(EngineRenderPipelines::Unlit),
-		.Texture_Albedo = rockID,
-		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere)
+		.Diffuse = error,
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere),
+		.TextureRepeat = 1.0f
 	};
 	tc = {
 	.Position = glm::vec3(-2,1,-2),
@@ -180,7 +177,7 @@ int main()
     
 	EncosyEngine::InitializeEngine();
 
-	//TestThreadedTaskRunner();
+	TestThreadedTaskRunner();
 	//Tests();
 	InitializeTestEntities();
 

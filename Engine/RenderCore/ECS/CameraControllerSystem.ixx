@@ -1,6 +1,7 @@
 module;
 
 #include <glm/glm.hpp>	
+#include <glm/gtc/quaternion.hpp>
 #include <fmt/core.h>
 
 export module Systems.CameraControllerSystem;
@@ -10,7 +11,6 @@ import ECS.System;
 import Components.TransformComponent;
 import Components.MovementComponent;
 import Components.CameraComponent;
-import Components.TestReadOnlyComponent;
 import SystemData.CameraControllerSystem;
 import SystemData.InputSystem;
 import EncosyEngine.MatrixCalculations;
@@ -19,6 +19,7 @@ import <map>;
 import <span>;
 import <vector>;
 import <iostream>;
+
 
 export
 class CameraControllerSystem : public System
@@ -35,22 +36,22 @@ protected:
 		Type = SystemType::System;
 		SystemQueueIndex = 1000;
 
-		AddSystemDataForReading(&InputSystemDataComponent);
-		AddSystemDataForWriting(CameraSystemDataComponent);
+		AddSystemDataForReading(&InputSystemDataStorage);
+		AddSystemDataForWriting(&CameraSystemDataComponent);
 
-		AddWantedComponentDataForWriting(
-			&TransformComponents,
-			&MovementComponents,
-			&CameraComponents
-		);
+		AddWantedComponentDataForWriting(&TransformComponents);
+		AddWantedComponentDataForWriting(&MovementComponents);
+		AddWantedComponentDataForWriting(&CameraComponents);
+
 	}
 	void PreUpdate(float deltaTime) override {}
 	void Update(float deltaTime) override {}
-	void UpdatePerEntity(float deltaTime, Entity entity, size_t vectorIndex, size_t spanIndex) override
+	void UpdatePerEntity(float deltaTime, Entity entity, EntityType entityType) override
 	{
-		TransformComponent& transformComponent = TransformComponents[vectorIndex][spanIndex];
-		MovementComponent& movementComponent = MovementComponents[vectorIndex][spanIndex];
-		CameraComponent& cameraComponent = CameraComponents[vectorIndex][spanIndex];
+
+		TransformComponent& transformComponent = GetCurrentEntityComponent(&TransformComponents);
+		MovementComponent& movementComponent = GetCurrentEntityComponent(&MovementComponents);
+		CameraComponent& cameraComponent = GetCurrentEntityComponent(&CameraComponents);
 
 		UpdateCamera(deltaTime, entity, transformComponent, movementComponent, cameraComponent);
 	}
@@ -65,34 +66,55 @@ protected:
 		MovementComponent& movementComponent,
 		CameraComponent& cameraComponent)
 	{
-		CameraControllerSystemData& controllerData = *CameraSystemDataComponent;
-		const InputSystemData& inputData = InputSystemDataComponent;
+		CameraControllerSystemData& controllerData = CameraSystemDataComponent.Storage[0];
+		InputSystemData inputData = InputSystemDataStorage.Storage[0];
+
+		float rotateX = 0;
+		float rotateY = 0;
 
 		if (inputData.MouseRightDown)
 		{
-			
-			controllerData.Yaw += inputData.MouseRelativeMotion.x / 2.0f;
-			controllerData.Pitch -= inputData.MouseRelativeMotion.y / 2.0f;
+			controllerData.MainWindow->SetRelativeMouseMode(true);
+			controllerData.Yaw += (float)inputData.MouseRelativeMotion.x * 50.0f * deltaTime;
+			controllerData.Pitch -= (float)inputData.MouseRelativeMotion.y * 50.0f * deltaTime;
 
 			if (controllerData.Pitch > 89.0f)
 				controllerData.Pitch = 89.0f;
 			if (controllerData.Pitch < -89.0f)
 				controllerData.Pitch = -89.0f;
+
+			rotateX = (float)inputData.MouseRelativeMotion.x * 50.0f * deltaTime;
+			rotateY = (float)inputData.MouseRelativeMotion.y * 50.0f * deltaTime;
+		}
+		else
+		{
+			controllerData.MainWindow->SetRelativeMouseMode(false);
 		}
 
+
+		//auto orientation = transformComponent.Orientation;
+		//orientation = MatrixCalculations::RotateByLocalAxisY(orientation, glm::radians(rotateX));
+		//orientation = MatrixCalculations::RotateByLocalAxisX(orientation, glm::radians(-rotateY));
+		//transformComponent.Orientation = orientation;
+
 		glm::vec3 WorldUp = glm::vec3(0, 1, 0);
+		//glm::vec3 front = orientation * glm::vec3(0, 0, 1);
 		glm::vec3 front;
+
 		float Yaw = controllerData.Yaw;
 		float Pitch = controllerData.Pitch;
 		front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
 		front.y = sin(glm::radians(Pitch));
 		front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
+
+
+
 		cameraComponent.Front = glm::normalize(front);
 		cameraComponent.Right = glm::normalize(glm::cross(cameraComponent.Front, WorldUp));  // normalize the vectors, because their length gets closer to 0 the more you look up or down which results in slower movement.
 		cameraComponent.Up = glm::normalize(glm::cross(cameraComponent.Right, cameraComponent.Front));
 
 		//Debug Camera Movement
-		if (entity.GetID() == controllerData.MainCamera.GetID())
+		if (entity == controllerData.MainCamera)
 		{
 			movementComponent.Direction = glm::vec3(0, 0, 0);
 			float speedMultiplier = 1.0f;
@@ -109,24 +131,18 @@ protected:
 			glm::normalize(movementComponent.Direction);
 
 			transformComponent.Position += movementComponent.Direction * movementComponent.Speed * speedMultiplier * deltaTime;
-
-			cameraComponent.Orientation = MatrixCalculations::CalculateLookAtMatrix(transformComponent.Position, transformComponent.Position + cameraComponent.Front, cameraComponent.Up);
+			cameraComponent.View = MatrixCalculations::CalculateLookAtMatrix(transformComponent.Position, transformComponent.Position + cameraComponent.Front, cameraComponent.Up);
 
 			//fmt::println("POS:  {},{},{}", transformComponent.Position.x, transformComponent.Position.y, transformComponent.Position.z);
 		}
 	}
-
-	//int CreateCamera(int width, int height, bool ortho = true, float fovAngle = 45.0f, float near = 0.1f, float far = 100.0f);
-	//void UpdateCameraProjectionMatrix(CameraEntity* camera, int width, int height, bool ortho = true);
-	//void SetMainCamera(int cameraID);
-	//CameraEntity* GetMainCamera();
 	
 private:
+	WriteReadComponentStorage<TransformComponent> TransformComponents;
+	WriteReadComponentStorage<MovementComponent> MovementComponents;
+	WriteReadComponentStorage<CameraComponent> CameraComponents;
 
-	std::vector<std::span<TransformComponent>> TransformComponents;
-	std::vector<std::span<MovementComponent>> MovementComponents;
-	std::vector<std::span<CameraComponent>> CameraComponents;
+	WriteReadSystemDataStorage<CameraControllerSystemData> CameraSystemDataComponent;
+	ReadOnlySystemDataStorage<InputSystemData> InputSystemDataStorage;
 
-	CameraControllerSystemData* CameraSystemDataComponent;
-	InputSystemData InputSystemDataComponent;
 };

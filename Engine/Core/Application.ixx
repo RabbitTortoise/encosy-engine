@@ -23,8 +23,6 @@ public:
     {
         fmt::println("EncosyEngine Initialization");
 
-
-
         //Create new Window
         fmt::println("Window Creation");
         SDL_Init(SDL_INIT_VIDEO);
@@ -42,61 +40,15 @@ public:
         // Setup RenderCore
         fmt::println("RenderCore Initialization");
         EngineRenderCore = std::make_unique<RenderCore>();
-        EngineRenderCore->InitializeVulkan(MainWindow);
+        EngineRenderCore->InitializeVulkan(MainWindow, PrimaryWorld);
 
         // Initialize Engine systems.
         EngineEncosyCore->InitCoreSystems(EngineWindowManager.get(), EngineRenderCore.get());
 
-
-        //Initialize ECS
-        //ECSWorld->Init();
-        //WorldEntityManager = ECSWorld->GetEntityManager();
-        //WorldSystemsManager = ECSWorld->GetSystemsManager();
-        //Initialize core systems.
-        //WorldSystemsManager->InitSystems();
-
-        //fmt::println("ECS Setup complete");
-
-        //Load all scripts.
-        //ScriptManager = new ScriptingCore();
-        //ScriptManager->CreateScripts();
-        //ScriptManager->InitScripts(ECSWorld);
-
-        //Initialize new systems created by scripts.
-        //WorldSystemsManager->InitSystems();
-
-        //fmt::println("Script Setup complete");
     }
 
     void EngineLoop()
     {
-        // Get time using glfwGetTime-function, for delta time calculation.
-        //float prevTime = (float)glfwGetTime();
-        //while (!glfwWindowShouldClose(EngineWindowManager->GetGLFWWindow()))
-        //{
-        //    
-        //    float curTime = (float)glfwGetTime();
-        //    float deltaTime = curTime - prevTime;
-        //    prevTime = curTime;
-        //    //fmt::println("DeltaTime: " << deltaTime);
-
-        //    // Poll other window events.
-        //    glfwPollEvents();
-
-        //    //Collision Update
-        //    //WorldSystemsManager->UpdateCollisionSystems(deltaTime);
-
-        //    //Scripting Update
-        //    //ScriptManager->UpdateScripts(deltaTime);
-        //    //System Update
-        //    //WorldSystemsManager->UpdateSystems(deltaTime);
-
-        //    // Render the game frame and swap OpenGL back buffer to be as front buffer.
-        //    //WorldSystemsManager->UpdateRenderSystems(deltaTime);
-        //    //ApplicationWindowManager->SwapBuffer();
-
-        //    //WorldEntityManager->DeleteMarkedEntities();
-        //}
 
         using clock = std::chrono::high_resolution_clock;
         auto start = clock::now();
@@ -122,18 +74,15 @@ public:
             if (EngineRenderCore->CheckIfRenderingConditionsMet())
             {
                 EngineRenderCore->RenderStart();
-                
-
                 EngineEncosyCore->PrimaryWorldRenderUpdate(deltaTime);
-
                 EngineRenderCore->EndRecording();
                 EngineRenderCore->SubmitToQueue();
             }
             // Core LateUpdate
-            auto processEnd = clock::now();
-            auto processTime = (processEnd - start);
-            auto sleepfor = std::chrono::milliseconds(12) - processTime;
-            std::this_thread::sleep_for(sleepfor);
+            //auto processEnd = clock::now();
+            //auto processTime = (processEnd - start);
+            //auto sleepfor = std::chrono::milliseconds(12) - processTime;
+            //std::this_thread::sleep_for(sleepfor);
         }
 
         //Clean Engine Resources

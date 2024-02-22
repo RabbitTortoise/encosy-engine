@@ -14,6 +14,7 @@ import <vector>;
 import <iostream>;
 import <queue>;
 
+
 export
 class InputSystem : public System
 {
@@ -34,21 +35,21 @@ protected:
 		Type = SystemType::System;
 		SystemQueueIndex = 0;
 
-		AddSystemDataForWriting(InputState);
+		AddSystemDataForWriting(&InputSystemDataComponent);
 	}
 	void PreUpdate(float deltaTime) override {}
 	void Update(float deltaTime) override
 	{
 		UpdateInputStates(deltaTime);
 	}
-	void UpdatePerEntity(float deltaTime, Entity entity, size_t vectorIndex, size_t spanIndex) override {}
+	void UpdatePerEntity(float deltaTime, Entity entity, EntityType entityType) override {}
 	void PostUpdate(float deltaTime) override {}
 	void Destroy() override {}
 
 
 	void UpdateInputStates(float deltaTime)
 	{
-		auto& inputData = *InputState;
+		auto& inputData = GetSystemData(&InputSystemDataComponent);
 
 		inputData.MouseLeftClicked = false;
 		inputData.MouseRightClicked = false;
@@ -83,6 +84,12 @@ protected:
 					break;
 				case SDLK_e:
 					inputData.E = keyDown;
+					break;
+				case SDLK_SPACE:
+					inputData.Spacebar = keyDown;
+					break;
+				case SDLK_RETURN:
+					inputData.Return = keyDown;
 					break;
 				case SDLK_LSHIFT:
 					inputData.Left_Shift = keyDown;
@@ -143,5 +150,7 @@ protected:
 
 private:
 	std::queue<SDL_Event> EventsInQueue;
-	InputSystemData* InputState;
+
+	WriteReadSystemDataStorage<InputSystemData> InputSystemDataComponent;
+
 };

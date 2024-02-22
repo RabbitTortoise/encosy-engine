@@ -93,6 +93,7 @@ protected:
 
 		builder.Clear();
 		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		builder.AddBinding(1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		UnlitPipeline.TextureDataDescriptorSetLayout = builder.Build(Resources->vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT);
 		UnlitPipeline.DescriptorSets.push_back(UnlitPipeline.TextureDataDescriptorSetLayout);
 
@@ -115,12 +116,14 @@ protected:
 		LitPipeline.DescriptorSets.push_back(LitPipeline.CameraDataDescriptorSetLayout);
 
 		builder.Clear();
-		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC);
-		LitPipeline.ModelDataDescriptorSetLayout = builder.Build(Resources->vkDevice, VK_SHADER_STAGE_VERTEX_BIT);
-		LitPipeline.DescriptorSets.push_back(LitPipeline.ModelDataDescriptorSetLayout);
+		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+		LitPipeline.LightingDataDescriptorSetLayout = builder.Build(Resources->vkDevice, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT);
+		LitPipeline.DescriptorSets.push_back(LitPipeline.LightingDataDescriptorSetLayout);
 
 		builder.Clear();
 		builder.AddBinding(0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		builder.AddBinding(1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+		builder.AddBinding(2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 		LitPipeline.TextureDataDescriptorSetLayout = builder.Build(Resources->vkDevice, VK_SHADER_STAGE_FRAGMENT_BIT);
 		LitPipeline.DescriptorSets.push_back(LitPipeline.TextureDataDescriptorSetLayout);
 
@@ -171,7 +174,7 @@ protected:
 		VK_CHECK(vkCreatePipelineLayout(Resources->vkDevice, &unlit_layout_info, nullptr, &UnlitPipeline.Layout));
 
 		// Build the pipeline
-		vkUtil::PipelineBuilder pipelineBuilder;
+		PipelineBuilder pipelineBuilder;
 
 		pipelineBuilder.vkPipelineLayout = UnlitPipeline.Layout;
 		pipelineBuilder.SetShaders(unlitVertexShader, unlitFragShader);
@@ -184,7 +187,6 @@ protected:
 		pipelineBuilder.SetColorAttachmentFormat(Resources->vkDrawImage.imageFormat);
 		pipelineBuilder.SetDepthFormat(Resources->vkDepthImage.imageFormat);
 
-		//finally build the pipeline
 		UnlitPipeline.Pipeline = pipelineBuilder.BuildPipeline(Resources->vkDevice);
 
 		// Push pipelines to the deletion queue
@@ -203,7 +205,7 @@ protected:
 		
 		VkPushConstantRange bufferRange{};
 		bufferRange.offset = 0;
-		bufferRange.size = sizeof(VertexBufferPushConstants);
+		bufferRange.size = sizeof(InstancedPushConstants);
 		bufferRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 		VkPipelineLayoutCreateInfo lit_layout_info = vkInit::Pipeline_Layout_CreateInfo();
@@ -215,7 +217,7 @@ protected:
 		VK_CHECK(vkCreatePipelineLayout(Resources->vkDevice, &lit_layout_info, nullptr, &LitPipeline.Layout));
 
 		// Build the pipeline
-		vkUtil::PipelineBuilder pipelineBuilder;
+		PipelineBuilder pipelineBuilder;
 
 		pipelineBuilder.vkPipelineLayout = LitPipeline.Layout;
 		pipelineBuilder.SetShaders(litVertexShader, litFragShader);
@@ -228,7 +230,6 @@ protected:
 		pipelineBuilder.SetColorAttachmentFormat(Resources->vkDrawImage.imageFormat);
 		pipelineBuilder.SetDepthFormat(Resources->vkDepthImage.imageFormat);
 
-		//finally build the pipeline
 		LitPipeline.Pipeline = pipelineBuilder.BuildPipeline(Resources->vkDevice);
 
 		// Push pipelines to the deletion queue

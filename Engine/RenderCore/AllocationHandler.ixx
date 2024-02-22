@@ -11,7 +11,7 @@ export module RenderCore.AllocationHandler;
 
 import RenderCore.VulkanInitializers;
 import RenderCore.VulkanErrorLogger;
-import RenderCore.VulkanImages;
+import RenderCore.VulkanUtilities;
 import RenderCore.VulkanDescriptors;
 import RenderCore.VulkanTypes;
 
@@ -168,6 +168,27 @@ public:
 		*data = *dataToWrite;
 	}
 
+	GPUModelMatrixBuffer CreateModelMatrixBuffer(const std::vector<glm::mat4>& matrixes)
+	{
+		const size_t bufferSize = matrixes.size() * sizeof(glm::mat4);
+		GPUModelMatrixBuffer newBuffer;
+
+		// Create buffer
+		newBuffer.matrixBuffer = CreateGPUBuffer(bufferSize,
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
+
+		// Find the address of the vertex buffer
+		VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newBuffer.matrixBuffer.buffer };
+		newBuffer.matrixBufferAddress = vkGetBufferDeviceAddress(vkDevice, &deviceAdressInfo);
+
+		void* matrixData = newBuffer.matrixBuffer.allocation->GetMappedData();
+
+		// Copy vertex buffer
+		memcpy(matrixData, matrixes.data(), bufferSize);
+
+		return newBuffer;
+	}
+
 
 	// This assumes that Smart Access Memory / Resizable BAR is enabled!
 	// No staging buffer is used as rebar should be enabled.
@@ -274,7 +295,7 @@ public:
 
 
 		ImmediateSubmit([&](VkCommandBuffer cmd) {
-			vkUtil::TransitionImage(cmd, newImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+			TransitionImage(cmd, newImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 			VkBufferImageCopy copyRegion = {};
 			copyRegion.bufferOffset = 0;
@@ -290,7 +311,7 @@ public:
 			// copy the buffer into the image
 			vkCmdCopyBufferToImage(cmd, uploadbuffer.buffer, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-			vkUtil::TransitionImage(cmd, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+			TransitionImage(cmd, newImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
 			});
 
 		DestroyBuffer(uploadbuffer);

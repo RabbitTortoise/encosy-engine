@@ -1,5 +1,6 @@
 module;
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 export module Components.CameraComponent;
 
@@ -13,6 +14,6 @@ export struct CameraComponent
 	glm::vec3 Right;
 	glm::vec3 Up;
 
-	glm::mat4 Orientation;
-	glm::mat4 ProjectionMatrix;
+	glm::mat4 View;
+	glm::mat4 Projection;
 };

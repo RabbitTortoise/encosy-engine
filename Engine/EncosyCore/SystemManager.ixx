@@ -8,6 +8,7 @@ import ECS.System;
 import ECS.Entity;
 import ECS.EntityManager;
 import ECS.ComponentManager;
+import EncosyCore.ThreadedTaskRunner;
 
 import <map>;
 import <vector>;
@@ -29,28 +30,60 @@ public:
 	SystemManager(ComponentManager* componentManager, EntityManager* entityManager) : WorldComponentManager(componentManager), WorldEntityManager(entityManager) {}
 	~SystemManager() {}
 
-	template <class SystemClass, typename... Args>
-	SystemClass* AddSystem(std::string systemName, bool allowThreading = false, Args...args)
+	template <SystemBaseClass T, typename... Args>
+	T* AddSystem(std::string systemName, Args...args)
 	{
 		//If system already exists, return existing
 		auto it = SystemNames.find(systemName);
 		if (it != SystemNames.end())
 		{
-			std::cout << "WARN: System with the name already exists: " << systemName << std::endl;
+			fmt::println("ERROR: System with the name already exists : {}", systemName);
 			return nullptr;
 		}
 
 		auto id = Systems.size();
-		auto system = std::make_unique<SystemClass>(SystemClass(args...));
+		auto system = std::make_unique<T>(T(args...));
 
 		system->ID = id;
-		system->AllowThreading = allowThreading;
 		system->WorldComponentManager = WorldComponentManager;
 		system->WorldEntityManager = WorldEntityManager;
+		InitSystem(system.get(), systemName);
 
+		ThreadingProtectionChecks(system.get(), systemName);
+
+		system->SetInitialized(true);
+		system->SetEnabled(true);
+
+		auto returnSystem = system.get();
+
+		Systems.push_back(std::move(system));
+		std::type_index systemTypeIndex = typeid(T);
+		SystemNames.insert(std::pair(systemName, id));
+		SystemIDs.insert(std::pair(systemTypeIndex, id));
+
+		return returnSystem;
+	}
+
+	template <SystemClass T>
+	void InitSystem(T* system, std::string systemName)
+	{
+		fmt::println("Initializing system ", systemName);
 		system->Init();
+	}
 
+	template <ThreadedSystemClass T>
+	void InitSystem(T* system, std::string systemName)
+	{
+		fmt::println("Initializing threaded system ", systemName);
+		system->ThreadCount = GetThreadCount();
+		system->RuntimeThreadInfo = std::vector<ThreadInfo>(system->ThreadCount, ThreadInfo());
+		system->ThreadRunner = &ThreadRunner;
+		system->Init();
+	}
 
+	template <SystemBaseClass T>
+	bool ThreadingProtectionChecks(T* system, std::string systemName)
+	{
 		WorldComponentManager->InitThreadingProtectionCheck();
 
 		system->UpdateMatchingEntityTypes();
@@ -64,30 +97,29 @@ public:
 		wantedWriteRead.merge(system->WriteReadSystemData);
 		wantedReadOnly.merge(system->AlwaysFetchedWriteReadComponentTypes);
 
-				
 		bool readOnlyIsEqual = (wantedReadOnly == WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed);
 		bool WriteReadIsEqual = (wantedWriteRead == WorldComponentManager->ThreadingProtectionWriteReadComponentsAccessed);
 
-		WarnAboutMismatch(systemName, readOnlyIsEqual, WriteReadIsEqual, allowThreading, GetSetAsString(wantedReadOnly), GetSetAsString(wantedWriteRead));
+		if (!readOnlyIsEqual)
+		{
+			fmt::println("ERROR when creating {}: WantedReadOnlyComponentTypes is different compared to what the system accesses", systemName);
+			fmt::println("{} != {}", GetSetAsString(wantedReadOnly), GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
+
+		}
+		if (!WriteReadIsEqual)
+		{
+			fmt::println("ERROR when creating {}: WantedWriteReadComponentTypes is different compared to what the system accesses", systemName);
+			fmt::println("{} != {}", GetSetAsString(wantedWriteRead), GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
+		}
 
 		WorldComponentManager->FinishThreadingProtectionCheck();
 
-		if ((allowThreading && readOnlyIsEqual && WriteReadIsEqual) == false)
+		if ((readOnlyIsEqual && WriteReadIsEqual) == false)
 		{
-			return nullptr;
+			abort();
 		}
 
-		system->SetInitialized(true);
-		system->SetEnabled(true);
-
-		auto returnSystem = system.get();
-
-		Systems.push_back(std::move(system));
-		std::type_index systemTypeIndex = typeid(SystemClass);
-		SystemNames.insert(std::pair(systemName, id));
-		SystemIDs.insert(std::pair(systemTypeIndex, id));
-
-		return returnSystem;
+		return true;
 	}
 
 	bool DisableSystem(SystemID systemID)
@@ -110,7 +142,7 @@ public:
 		return false;
 	}
 
-	System* GetSystemById(SystemID systemId)
+	SystemBase* GetSystemById(SystemID systemId)
 	{
 		for (auto const& system : Systems)
 		{
@@ -122,7 +154,7 @@ public:
 		return nullptr;
 	}
 
-	System* GetSystemByName(std::string systemName)
+	SystemBase* GetSystemByName(std::string systemName)
 	{
 		auto it = SystemNames.find(systemName);
 		if (it != SystemNames.end())
@@ -144,31 +176,48 @@ public:
 		return nullptr;
 	}
 
+	int GetThreadCount()
+	{
+		return ThreadRunner.GetThreadCount();
+	}
+
 protected:
 	void UpdateSystems(float deltaTime)
 	{
-		//PreUpdate
+		// PreUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::System)
 			{
 				Systems.at(i)->PreUpdate(deltaTime);
 			}
+			else if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::ThreadedSystem)
+			{
+				Systems.at(i)->PreUpdate(deltaTime);
+			}
 		}
 
-		//Update
+		// Update
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::System)
 			{
 				Systems.at(i)->SystemUpdate(deltaTime);
 			}
+			else if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::ThreadedSystem)
+			{
+				Systems.at(i)->SystemUpdate(deltaTime);
+			}
 		}
 
-		//Update
+		// PostUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::System)
+			{
+				Systems.at(i)->PostUpdate(deltaTime);
+			}
+			else if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::ThreadedSystem)
 			{
 				Systems.at(i)->PostUpdate(deltaTime);
 			}
@@ -177,7 +226,7 @@ protected:
 
 	void UpdateRenderSystems(float deltaTime)
 	{
-		//PreUpdate
+		// PreUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::RenderSystem)
@@ -185,7 +234,7 @@ protected:
 				Systems.at(i)->PreUpdate(deltaTime);
 			}
 		}
-		//Update
+		// Update
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::RenderSystem)
@@ -194,7 +243,7 @@ protected:
 			}
 		}
 
-		//Update
+		// PostUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::RenderSystem)
@@ -206,7 +255,7 @@ protected:
 
 	void UpdatePhysicsSystems(float deltaTime)
 	{
-		//PreUpdate
+		// PreUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::PhysicsSystem)
@@ -214,7 +263,7 @@ protected:
 				Systems.at(i)->PreUpdate(deltaTime);
 			}
 		}
-		//Update
+		// Update
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::PhysicsSystem)
@@ -223,7 +272,7 @@ protected:
 			}
 		}
 
-		//Update
+		// PostUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::PhysicsSystem)
@@ -242,6 +291,12 @@ protected:
 	}
 
 private:
+
+	bool CheckSystemType(System* system, SystemType approved...)
+	{
+
+	}
+
 	std::string GetSetAsString(const std::unordered_set<std::type_index>& set)
 	{
 		std::string s;
@@ -253,42 +308,12 @@ private:
 		return s;
 	}
 
-
-	void WarnAboutMismatch(std::string systemName, bool readOnlyIsEqual, bool WriteReadIsEqual, bool allowThreading, std::string wantedRO, std::string wantedRW)
-	{
-		if (!readOnlyIsEqual)
-		{
-			if (allowThreading)
-			{
-				fmt::println("CRITICAL ERROR when creating {}: WantedReadOnlyComponentTypes is different compared to what the system accesses", systemName);
-				fmt::println("{} != {}", wantedRO, GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
-			}
-			else
-			{
-				fmt::println("Warning when creating {}: WantedReadOnlyComponentTypes is different compared to what the system accesses", systemName);
-				fmt::println("{} != {}", wantedRO, GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
-			}
-		}
-		if (!WriteReadIsEqual)
-		{
-			if (allowThreading)
-			{
-				fmt::println("CRITICAL ERROR when creating {}: WantedWriteReadComponentTypes is different compared to what the system accesses", systemName);
-				fmt::println("{} != {}", wantedRW, GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
-			}
-			else
-			{
-				fmt::println("Warning when creating {}: WantedWriteReadComponentTypes is different compared to what the system accesses", systemName);
-				fmt::println("{} != {}", wantedRW, GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
-			}
-		}
-	}
-
-
 	EntityManager* WorldEntityManager;
 	ComponentManager* WorldComponentManager;
-	std::vector<std::unique_ptr<System>> Systems;
-	std::vector<size_t> EntityComponentFilterQuerySystemIDs; //TODO: When EntityTypeStorage component list is modified, these systems need to re-evaluate what entities to process.
+	std::vector<std::unique_ptr<SystemBase>> Systems;
 	std::map<std::string, SystemID> SystemNames;
 	std::map<std::type_index, SystemID> SystemIDs;
+
+	// System threading
+	ThreadedTaskRunner ThreadRunner;
 };

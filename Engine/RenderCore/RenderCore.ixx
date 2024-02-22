@@ -21,12 +21,13 @@ export module EncosyEngine.RenderCore;
 
 import EncosyEngine.MatrixCalculations;
 import EncosyEngine.WindowManager;
+import EncosyCore.EncosyWorld;
 
 import RenderCore.Resources;
 import RenderCore.VulkanInitializers;
 import RenderCore.VulkanErrorLogger;
 
-import RenderCore.VulkanImages;
+import RenderCore.VulkanUtilities;
 import RenderCore.VulkanDescriptors;
 import RenderCore.AllocationHandler;
 import RenderCore.MeshLoader;
@@ -44,6 +45,7 @@ import <functional>;
 import <deque>;
 import <filesystem>;
 import <iostream>;
+import <format>;
 
 
 export class RenderCore
@@ -64,8 +66,9 @@ public:
 
 protected:
 
-	void InitializeVulkan(WindowInstance* window)
+	void InitializeVulkan(WindowInstance* window, EncosyWorld* world)
 	{
+		MainWorld = world;
 		Resources.MainWindow = window;
 		Resources.vkWindowExtent.height = window->GetHeight();
 		Resources.vkWindowExtent.width = window->GetWidth();
@@ -156,12 +159,12 @@ protected:
 
 		// Transition our main draw image into general layout so we can write into it
 		// We will overwrite it all so we don't care about what was the older layout
-		vkUtil::TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
 
 		DrawBackground(Resources.CurrentCMD);
 
-		vkUtil::TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-		vkUtil::TransitionImage(Resources.CurrentCMD, Resources.vkDepthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
+		TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		TransitionImage(Resources.CurrentCMD, Resources.vkDepthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
 
 		// Begin a render pass connected to our draw image
 		VkRenderingAttachmentInfo colorAttachment = vkInit::AttachmentInfo(Resources.vkDrawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
@@ -178,20 +181,20 @@ protected:
 		vkCmdEndRendering(Resources.CurrentCMD);
 
 		// Transition the draw image and the swapchain image into their correct transfer layouts
-		vkUtil::TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-		vkUtil::TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 
 		// Execute a copy from the draw image into the swapchain
-		vkUtil::CopyImageToImage(Resources.CurrentCMD, Resources.vkDrawImage.image, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], Resources.vkDrawExtent, Resources.vkSwapchainExtent);
+		CopyImageToImage(Resources.CurrentCMD, Resources.vkDrawImage.image, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], Resources.vkDrawExtent, Resources.vkSwapchainExtent);
 
 		// Set swapchain image layout to Attachment Optimal so we can draw it
-		vkUtil::TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
 
 		// Draw imgui into the swapchain image
 		DrawImgui(Resources.CurrentCMD, Resources.vkSwapchainImageViews[Resources.CurrentSwapchainImageIndex]);
 
 		// Set swapchain image layout to Present so we can draw it
-		vkUtil::TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+		TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
 		// Finalize the command buffer (we can no longer add commands, but it can now be executed)
 		VK_CHECK(vkEndCommandBuffer(Resources.CurrentCMD));
@@ -286,17 +289,35 @@ protected:
 		ImGui_ImplSDL3_NewFrame();
 		ImGui::NewFrame();
 
-		if (ImGui::Begin("background")) {
-
+		if (ImGui::Begin("Rendering Settings")) {
+			ImGui::Text(std::format("FPS: {}", ImGui::GetIO().Framerate).c_str());
+			ImGui::Text(std::format("Entities simulated: {}", MainWorld->GetWorldEntityManager()->GetEntitiesCreatedCount()).c_str());
+			
 			ImGui::SliderFloat("Render Scale", &Resources.RenderScale, 0.3f, 1.f);
-
+			
 
 			ImGui::Text("Gradient settings");
 
 			ImGui::InputFloat4("Top", (float*)&Resources.BackgroundGradientData.data1);
 			ImGui::InputFloat4("Bottom", (float*)&Resources.BackgroundGradientData.data2);
-			//ImGui::InputFloat4("data3", (float*)&selected.data.data3);
-			//ImGui::InputFloat4("data4", (float*)&selected.data.data4);
+
+			ImGui::Text("Lighting settings");
+			ImGui::SliderFloat("Ambient light strength", &Resources.GlobalLightingData.ambientLightStrength, 0.0f, 1.0f);
+
+			ImGui::SliderFloat("Ambient light color R", &Resources.GlobalLightingData.ambientLightColor.r, 0.0f, 1.0f);
+			ImGui::SliderFloat("Ambient light color G", &Resources.GlobalLightingData.ambientLightColor.g, 0.0f, 1.0f);
+			ImGui::SliderFloat("Ambient light color B", &Resources.GlobalLightingData.ambientLightColor.b, 0.0f, 1.0f);
+
+			ImGui::SliderFloat("Directional light strength", &Resources.GlobalLightingData.directionalLightStrength, 0.0f, 1.0f);
+
+			ImGui::SliderFloat("Directional light direction X", &Resources.GlobalLightingData.directionalLightDir.x, -1.0f, 1.0f);
+			ImGui::SliderFloat("Directional light direction Y", &Resources.GlobalLightingData.directionalLightDir.y, -1.0f, 1.0f);
+			ImGui::SliderFloat("Directional light direction Z", &Resources.GlobalLightingData.directionalLightDir.z, -1.0f, 1.0f);
+
+			ImGui::SliderFloat("Directional light color R", &Resources.GlobalLightingData.directionalLightColor.r, 0.0f, 1.0f);
+			ImGui::SliderFloat("Directional light color G", &Resources.GlobalLightingData.directionalLightColor.g, 0.0f, 1.0f);
+			ImGui::SliderFloat("Directional light color B", &Resources.GlobalLightingData.directionalLightColor.b, 0.0f, 1.0f);
+
 		}
 
 		// Imgui UI to test
@@ -451,7 +472,9 @@ private:
 			//.use_default_format_selection()
 			.set_desired_format(VkSurfaceFormatKHR{ .format = Resources.vkSwapchainImageFormat, .colorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR })
 			// Use vsync present mode
-			.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+			//.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
+			// Use immediate mode
+			.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
 			.set_desired_extent(width, height)
 			.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 			.build()
@@ -590,19 +613,6 @@ private:
 		// This initializes imgui for SDL
 		ImGui_ImplSDL3_InitForVulkan(Resources.MainWindow->GetWindow());
 
-
-		/*
-		typedef struct VkPipelineRenderingCreateInfo {
-    VkStructureType    sType;
-    const void*        pNext;
-    uint32_t           viewMask;
-    uint32_t           colorAttachmentCount;
-    const VkFormat*    pColorAttachmentFormats;
-    VkFormat           depthAttachmentFormat;
-    VkFormat           stencilAttachmentFormat;
-} VkPipelineRenderingCreateInfo;
-		
-		*/
 		VkPipelineRenderingCreateInfo dynamic_rendering_info = {};
 		dynamic_rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
 		dynamic_rendering_info.pNext = 0;
@@ -709,6 +719,7 @@ private:
 	// Class specific
 	DeletionQueue MainDeletionQueue;
 	DescriptorAllocator DrawDescriptorAllocator;
+	EncosyWorld* MainWorld;
 
 	// Sharable resources
 	RenderCoreResources Resources;

@@ -5,13 +5,10 @@ export module EncosyEngine.EncosyCore;
 export import EncosyCore.EncosyWorld;
 
 
-// Core System requirements
+// Engine ECS setup
 import EncosyEngine.SetupCoreECS;
-import Components.TransformComponent;
-import Components.MovementComponent;
-import Components.CameraComponent;
 
-//Core Modules
+// Core Modules
 import EncosyEngine.RenderCore;
 import EncosyEngine.WindowManager;
 
@@ -57,7 +54,7 @@ public:
 	EncosyWorld* GetPrimaryWorld() { return PrimaryWorld.get(); }
 
 private:
-	std::vector<EntityTypeInfo> EngineEntities;
+	std::vector<EntityOperationResult> EngineEntities;
 	std::unique_ptr<EncosyWorld> PrimaryWorld;
 	WindowManager* EngineWindowManager;
 	RenderCore* EngineRenderCore;

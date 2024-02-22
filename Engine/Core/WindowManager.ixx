@@ -68,6 +68,10 @@ public:
         EventSubscribers.push_back(function);
     }
 
+    void SetRelativeMouseMode(bool mode)
+    {
+        SDL_SetRelativeMouseMode(mode);
+    }
 
     SDL_Window* GetWindow() { return Window; }
     const int GetWidth() const { return WindowWidth; }

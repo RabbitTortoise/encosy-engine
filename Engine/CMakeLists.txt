@@ -6,10 +6,13 @@ set (CXX_SCAN_FOR_MODULES    ON    CACHE    STRING    "Modules"    FORCE)
 # Set the project (solution name)
 project(
 	Encosy
-	VERSION 24.2.16
+	VERSION 24.2.15
     DESCRIPTION "Data-oriented game engine"
 	LANGUAGES CXX
 )
+
+#GLM options
+set (GLM_ENABLE_CXX_20 "Enable C++ 20" ON    CACHE    BOOL    "GLM"    FORCE)
 
 # Assimp options
 set (ASSIMP_BUILD_ZLIB    ON    CACHE    BOOL    "ASSIMP"    FORCE)
@@ -60,6 +63,8 @@ add_subdirectory(External/vk-bootstrap)
 add_subdirectory(External/assimp)
 add_subdirectory(External/SDL)
 
+set_property(TARGET assimp PROPERTY CXX_STANDARD 20)
+
 # STB_Image
 list(APPEND stb_image_DIR "${CMAKE_CURRENT_SOURCE_DIR}/External/stb_image/")
 list(APPEND stb_image_SRC "${CMAKE_CURRENT_SOURCE_DIR}/External/stb_image/stb_image.h")
@@ -101,13 +106,11 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/MatrixCalculations.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/MovementComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/TransformComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/MaterialComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/ModelMatrixComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/MovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/MovementSystemThreaded.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/ModelMatrixBuilderSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/SetupCoreECS.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/TestReadOnly.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/CameraComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/CameraControllerSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/CameraControllerSystemData.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystemData.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/EncosyCore.ixx"
@@ -123,17 +126,23 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCore.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCoreResources.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderPipelineManager.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanRenderSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanTypes.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanInitializers.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanErrorLogger.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanImages.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanUtilities.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanDescriptors.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/PipelineBuilder.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/AllocationHandler.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/MeshLoader.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/TextureLoader.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ShaderLoader.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/MaterialComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/UnlitRenderSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/LitRenderSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/LitRenderSystemThreaded.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystemData.ixx"
 )	
 
 # Used sources, Engine
@@ -180,18 +189,17 @@ set_property(TARGET EncosyTesting PROPERTY VS_DEBUGGER_WORKING_DIRECTORY "${CMAK
 # Create the source groups for source tree with root at CMAKE_CURRENT_SOURCE_DIR.
 source_group(EncosyTesting TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${EncosyTesting_SRC})
 
-
-
-# Shader building
-include("${PROJECT_SOURCE_DIR}/ShaderBuild.cmake")
-APPEND_GLSL_TO_TARGET(EncosyEngine ${PROJECT_SOURCE_DIR} "${EncosyEngine_SHADERS_SRC}")
-
-
 # Resource copying for debug build
 set(TEXTURES_DIR "${PROJECT_SOURCE_DIR}/Resources/Textures")
 set(MODELS_DIR "${PROJECT_SOURCE_DIR}/Resources/Models")
 set(SHADERS_DIR "${PROJECT_SOURCE_DIR}/Resources/Shaders")
 set(DEBUG_BUILD_RESOURCES_DIR "${PROJECT_SOURCE_DIR}/Build/Debug/Engine/Resources")
+
+# Shader building
+include("${PROJECT_SOURCE_DIR}/ShaderBuild.cmake")
+APPEND_GLSL_TO_TARGET(EncosyEngine ${PROJECT_SOURCE_DIR} ${DEBUG_BUILD_RESOURCES_DIR} "${EncosyEngine_SHADERS_SRC}")
+
+
 
 add_custom_command(
 TARGET EncosyEngine POST_BUILD

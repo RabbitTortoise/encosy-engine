@@ -20,6 +20,8 @@ export struct InputSystemData
 	bool W;
 	bool Q;
 	bool E;
+	bool Spacebar;
+	bool Return;
 	bool Left_Shift;
 	bool Left_Control;
 };

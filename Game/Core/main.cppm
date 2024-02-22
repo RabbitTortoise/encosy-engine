@@ -17,6 +17,7 @@ import Components.TransformComponent;
 import Components.MovementComponent;
 import Components.CameraComponent;
 import Components.MaterialComponent;
+import Components.ModelMatrixComponent;
 
 import EncosyCore.ThreadedTaskRunner;
 import RenderCore.MeshLoader;
@@ -37,6 +38,27 @@ import <typeindex>;
 import <typeinfo>;
 
 
+int testDimensionsX = 10;
+int testDimensionsY = 10;
+int testDimensionsZ = 10;
+
+
+
+float RandomNumber0_1()
+{
+	return (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
+}
+
+glm::vec3 RandDir()
+{
+	return { RandomNumber0_1() + 0.01f,RandomNumber0_1() + 0.01f ,RandomNumber0_1() + 0.01f };
+}
+
+float RandSpeed()
+{
+	return (RandomNumber0_1() * 20.0f + 5.0f);
+}
+
 
 void InitializeGameEntities()
 {
@@ -55,72 +77,184 @@ void InitializeGameEntities()
 
 
 	auto grassID = MainTextureLoader->LoadTexture("Grass_Texture.png");
+	auto grassNormalID = MainTextureLoader->LoadTexture("Grass_Normal.png");
 	auto rockID = MainTextureLoader->LoadTexture("Rock_Texture.png");
+	auto rockNormalID = MainTextureLoader->LoadTexture("Rock_Normal.png");
 	auto sandID = MainTextureLoader->LoadTexture("Sand_Texture.png");
+	auto sandNormalID = MainTextureLoader->LoadTexture("Sand_Normal.png");
 	auto snowID = MainTextureLoader->LoadTexture("Snow_Texture.png");
+	auto snowNormalID = MainTextureLoader->LoadTexture("Snow_Normal.png");
 	auto waterID = MainTextureLoader->LoadTexture("Water_Texture.png");
+	auto waterNormalID = MainTextureLoader->LoadTexture("Water_Normal.png");
+
+	std::vector<MeshID> meshIDs;
+	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Cube));
+	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Torus));
+
+	std::vector<TextureID> textureIds;
+	textureIds.push_back(grassID);
+	textureIds.push_back(rockID);
+	textureIds.push_back(sandID);
+	textureIds.push_back(snowID);
+	textureIds.push_back(waterID);
+
+	ModelMatrixComponent matrix = {};
 
 	TransformComponent tc = {
 	.Position = glm::vec3(0,-2,0),
 	.Scale = glm::vec3(10,10,1),
 	.Orientation = glm::quat(glm::vec3(glm::radians(90.0f),0,0)),
 	};
-	MaterialComponent mc = {
-		.UsedRenderPipeline = MainRenderPipelineManager->GetEngineRenderPipelineID(EngineRenderPipelines::Unlit),
-		.Texture_Albedo = grassID,
-		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Quad)
+	MaterialComponentLit mcLit = {
+		.Diffuse = grassID,
+		.Normal = grassNormalID,
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Quad),
+		.TextureRepeat = 2.0f
 	};
-	WorldEntityManager->CreateEntityWithData(tc, mc);
+	WorldEntityManager->CreateEntityWithData(tc, mcLit, matrix);
 
-	mc = {
-		.UsedRenderPipeline = MainRenderPipelineManager->GetEngineRenderPipelineID(EngineRenderPipelines::Unlit),
-		.Texture_Albedo = rockID,
-		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere)
+	mcLit = {
+		.Diffuse = rockID,
+		.Normal = rockNormalID,
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere),
+		.TextureRepeat = 1.0f
 	};
 	tc = {
 	.Position = glm::vec3(-2,1,-2),
-	.Scale = glm::vec3(.5,1,.5),
+	.Scale = glm::vec3(1,1,1),
 	.Orientation = glm::quat(glm::vec3(90,90,90)),
 	};
 
+
 	MovementComponent movc = {
-		.Direction = glm::vec3(0,0,0),
-		.Speed = 0.0f
+		.Direction = RandDir(),
+		.Speed = RandSpeed()
 	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mcLit, movc, matrix);
 
+	mcLit = {
+		.Diffuse = sandID,
+		.Normal = sandNormalID,
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere),
+		.TextureRepeat = 1.0f
+	};
 	tc = {
 	.Position = glm::vec3(2,1,2),
-	.Scale = glm::vec3(.5,1,1),
+	.Scale = glm::vec3(1,1,1),
 	.Orientation = glm::quat(glm::vec3(90,0,0)),
 	};
+	movc = {
+		.Direction = RandDir(),
+		.Speed = RandSpeed()
+	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mcLit, movc, matrix);
 
+	mcLit = {
+		.Diffuse = snowID,
+		.Normal = snowNormalID,
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere),
+		.TextureRepeat = 1.0f
+	};
 	tc = {
 	.Position = glm::vec3(-2,1,2),
-	.Scale = glm::vec3(1,1,.5),
+	.Scale = glm::vec3(1,1,1),
 	.Orientation = glm::quat(glm::vec3(0,0,90)),
 	};
+	movc = {
+		.Direction = RandDir(),
+		.Speed = RandSpeed()
+	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mcLit, movc, matrix);
 
+	mcLit = {
+		.Diffuse = waterID,
+		.Normal = waterNormalID,
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere),
+		.TextureRepeat = 1.0f
+	};
 	tc = {
 	.Position = glm::vec3(2,1,-2),
-	.Scale = glm::vec3(1,.5f,1),
+	.Scale = glm::vec3(1,1,1),
 	.Orientation = glm::quat(glm::vec3(0,90,0)),
 	};
-
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
-
-	tc = {
-	.Position = glm::vec3(0,4,0),
-	.Scale = glm::vec3(1,1,1),
-	.Orientation = glm::quat(glm::vec3(0,0,0)),
+	movc = {
+		.Direction = RandDir(),
+		.Speed = RandSpeed()
 	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mcLit, movc, matrix);
+
+	MaterialComponentUnlit mcUnlit = {
+		.Diffuse = MainTextureLoader->GetEngineTextureID(EngineTextures::ErrorCheckerBoard),
+		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere),
+		.TextureRepeat = 1.0f
+	};
+	tc = {
+	.Position = glm::vec3(0,4,0),
+	.Scale = glm::vec3(0.75f, 0.75f, 0.75f),
+	.Orientation = glm::quat(glm::vec3(0,0,0)),
+	};
+	movc = {
+		.Direction = RandDir(),
+		.Speed = RandSpeed()
+	};
+
+	WorldEntityManager->CreateEntityWithData(tc, mcUnlit, movc, matrix);
+
+	float dist = 5.0f;
+
+	int xStart = (-testDimensionsX) * dist / 2.0f;
+	int yStart = 0;
+	int zStart = -15;
+	int xCur = xStart;
+	int yCur = yStart;
+	int zCur = zStart;
+
+	for (size_t x = 0; x < testDimensionsX; x++)
+	{
+		yCur = yStart;
+		for (size_t y = 0; y < testDimensionsY; y++)
+		{
+			zCur = zStart;
+			for (size_t z = 0; z < testDimensionsY; z++)
+			{
+				glm::vec3 dir = RandDir();
+				float speed = RandSpeed();
+
+				float rand1 = RandomNumber0_1();
+				float rand2 = RandomNumber0_1();
+				int textureSelect = std::round(rand1 * (textureIds.size()-1));
+				int meshSelect = std::round(rand2 * (meshIDs.size() - 1));
+
+				TextureID usedTextureID = textureIds[textureSelect];
+				MeshID usedMeshId = meshIDs[meshSelect];
+				mcLit = {
+					.Diffuse = usedTextureID,
+					.Normal = usedTextureID + 1,
+					.RenderMesh = usedMeshId,
+					.TextureRepeat = 1.0f
+				};
+				tc = {
+					.Position = glm::vec3(xCur,yCur,zCur),
+					.Scale = glm::vec3(0.75,0.75,0.75),
+					.Orientation = glm::quat(glm::vec3(0,0,0)),
+				};
+				movc = {
+					.Direction = dir,
+					.Speed = speed
+				};
+
+				WorldEntityManager->CreateEntityWithData(tc, mcLit, movc, matrix);
+
+				zCur -= dist;
+			}
+			yCur += dist;
+		}
+		xCur += dist;
+	}
 
 }
 

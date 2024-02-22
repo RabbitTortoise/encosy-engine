@@ -20,7 +20,7 @@ export typedef size_t EntityComponentIndex;
 
 export struct EntityStorageLocator
 {
-	EntityID ID;
+	Entity ID;
 	EntityComponentIndex ComponentIndex;
 };
 
@@ -29,13 +29,13 @@ export class EntityTypeStorage
 	friend class EntityManager;
 
 public:
-	EntityTypeStorage(EntityTypeID entityTypeId) 
+	EntityTypeStorage(EntityType entityType) 
 	{
-		StorageEntityTypeID = entityTypeId;
+		StorageEntityType = entityType;
 	}
 	~EntityTypeStorage() {}
 
-	EntityTypeID GetStorageEntityTypeID() const { return StorageEntityTypeID; }
+	EntityType GetStorageEntityType() const { return StorageEntityType; }
 	std::vector<std::type_index> GetEntityComponentTypes() const { return EntityComponentTypes; }
 
 protected:
@@ -48,13 +48,13 @@ protected:
 		std::sort(EntityComponentTypes.begin(), EntityComponentTypes.end());
 	}
 
-	void AddEntityToStorage(const EntityID entityId)
+	void AddEntityToStorage(const Entity entityId)
 	{
 		StorageLocations.push_back({ entityId, EntityCount });
 		EntityCount++;
 	}
 
-	const EntityComponentIndex GetEntityStorageID(const EntityID entityId)
+	const EntityComponentIndex GetEntityStorageID(const Entity entityId)
 	{
 		auto entityStorageId = std::ranges::find_if(StorageLocations, [=](const auto& location) {
 			return location.ID == entityId;
@@ -67,7 +67,7 @@ protected:
 		return entityStorageId->ComponentIndex;
 	}
 
-	const EntityID GetEntityIdFromComponentIndex(EntityComponentIndex componentIndex)
+	const Entity GetEntityIdFromComponentIndex(EntityComponentIndex componentIndex)
 	{
 		auto it = std::ranges::find_if(StorageLocations, [=](const auto& location) {
 			return location.ComponentIndex == componentIndex;
@@ -99,7 +99,7 @@ protected:
 
 private:
 	size_t EntityCount = 0;
-	EntityTypeID StorageEntityTypeID;
+	EntityType StorageEntityType;
 	std::vector<std::type_index> EntityComponentTypes;
 	std::vector<EntityStorageLocator> StorageLocations;
 	std::map<std::type_index, ComponentStorageLocator> ComponentStorageLocators;

@@ -12,25 +12,6 @@ import <queue>;
 import <functional>;
 import <memory>;
 
-
-void RunThread(std::stop_token st, int id, std::binary_semaphore* NewTaskReady, std::binary_semaphore* TaskFinished)
-{
-	while (!st.stop_requested())
-	{
-		fmt::println("{}: Waiting for new task", id);
-		NewTaskReady->acquire();
-		if (!st.stop_requested())
-		{
-			fmt::println("{}: Task Started", id);
-			std::this_thread::sleep_for(std::chrono::duration<double>(1));
-			//std::invoke(*CurrentTask);
-			fmt::println("{}: Task finished", id);
-			TaskFinished->release();
-		}
-	}
-	fmt::println("{}: Stop was requested", id);
-}
-
 class TaskThread
 {
 	struct ThreadData
@@ -64,20 +45,20 @@ public:
 	{
 		while (!thread_data->StopToken.stop_requested())
 		{
-			fmt::println("{}: Waiting for new task", thread_data->ThreadId);
+			//fmt::println("{}: Waiting for new task", thread_data->ThreadId);
 			thread_data->NewTaskReady->acquire();
 			if (!thread_data->StopToken.stop_requested())
 			{
-				fmt::println("{}: Task Started", thread_data->ThreadId);
+				//fmt::println("{}: Task Started", thread_data->ThreadId);
 
 				//std::this_thread::sleep_for(std::chrono::duration<double>(1));
 				std::invoke(thread_data->CurrentTask);
 
-				fmt::println("{}: Task finished", thread_data->ThreadId);
+				//fmt::println("{}: Task finished", thread_data->ThreadId);
 				thread_data->TaskFinished->release();
 			}
 		}
-		fmt::println("{}: Stop was requested", thread_data->ThreadId);
+		//fmt::println("{}: Stop was requested", thread_data->ThreadId);
 	}
 
 	ThreadData* Data;
@@ -111,7 +92,6 @@ public:
 	}
 	~ThreadedTaskRunner()
 	{
-		fmt::println("DELETING ThreadedTaskRunner");
 
 		StopSource.request_stop();
 		for (size_t i = 0; i < ThreadCount; ++i)
@@ -151,6 +131,7 @@ public:
 		for (size_t i = 0; i < ThreadCount; ++i)
 		{
 			Threads[i].Data->TaskFinished->acquire();
+			Threads[i].Data->TaskFinished->release();
 		}
 	}
 

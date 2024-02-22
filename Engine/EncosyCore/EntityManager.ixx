@@ -1,4 +1,6 @@
 module;
+#include <fmt/core.h>
+
 export module ECS.EntityManager;
 
 
@@ -11,7 +13,6 @@ import <map>;
 import <vector>;
 import <string>;
 import <memory>;
-import <iostream>;
 import <typeindex>;
 import <typeinfo>;
 import <utility>;
@@ -19,13 +20,57 @@ import <algorithm>;
 import <format>;
 import <span>;
 import <unordered_set>;
+import <unordered_map>;
 
 export struct EntitySpanFetchInfo
 {
-	EntityTypeID TypeID;
+	EntityType Type;
+	std::string TypeName;
 	size_t EntityCount;
 	std::vector<EntityStorageLocator> EntityLocators;
 };
+
+
+export struct EntityOperationResult
+{
+	enum class Result { TypeFound = 0, NotFound, Created, Exists, Error };
+
+	EntityOperationResult()
+	{
+		OperationResult = Result::NotFound;
+		Type = -1;
+		TypeName = "DOES NOT EXIST";
+	}
+	EntityOperationResult(Result message, EntityType entityType, std::string typeName)
+	{
+		OperationResult = message;
+		Type = entityType;
+		TypeName = typeName;
+	}
+	Result OperationResult;
+	EntityType Type;
+	std::string TypeName;
+
+	std::string GetMessageAsString()
+	{
+		switch (OperationResult)
+		{
+		case EntityOperationResult::Result::TypeFound:
+			break;
+		case EntityOperationResult::Result::NotFound:
+			break;
+		case EntityOperationResult::Result::Created:
+			break;
+		case EntityOperationResult::Result::Exists:
+			break;
+		case EntityOperationResult::Result::Error:
+			break;
+		default:
+			break;
+		}
+	}
+};
+
 
 export class EntityManager
 {
@@ -38,12 +83,19 @@ public:
 	template<typename...ComponentType>
 	bool ReplaceEntityComponentData(const Entity entity, const ComponentType...Components)
 	{
-		auto storageIt = EntityStorages.find(entity.GetType());
-		if (storageIt == EntityStorages.end())
+		auto entityType = EntityTypeMap.find(entity);
+		if (entityType == EntityTypeMap.end())
 		{
+			fmt::println("ERROR: Entity with ID {} was not found", entity);
 			return false;
 		}
-		auto entityStorageID = storageIt->second->GetEntityStorageID(entity.GetID());
+		auto storageIt = EntityStorages.find(entityType->second);
+		if (storageIt == EntityStorages.end())
+		{
+			fmt::println("ERROR: Entity {} has invalid type in EntityTypeMap: {}", entity, entityType->second);
+			return false;
+		}
+		auto entityStorageID = storageIt->second->GetEntityStorageID(entity);
 		(ReplaceEntityComponent(storageIt->second.get(), entityStorageID, Components), ...);
 		return true;
 	}	
@@ -51,40 +103,40 @@ public:
 	template<typename...ComponentTypes>
 	Entity CreateEntityWithData(const std::string entityTypeName, const ComponentTypes...components)
 	{
-		return CreateEntityWithData(GetEntityTypeInfo(entityTypeName).TypeID, components...);
+		return CreateEntityWithData(GetEntityTypeInfo(entityTypeName).Type, components...);
 	}
 
 	template<typename...ComponentTypes>
 	Entity CreateEntityWithData(const ComponentTypes...components)
 	{
 		auto componentTypeIndexes = GatherTypeIndexes<ComponentTypes...>();
-		EntityTypeID typeId = FindEntityTypeWithComponents(componentTypeIndexes);
+		EntityType typeId = FindEntityTypeWithComponents(componentTypeIndexes);
 
 		return CreateEntityWithData(typeId, components...);
 	}
 
 	template<typename...ComponentTypes>
-	Entity CreateEntityWithData(const EntityTypeID entityType, const ComponentTypes...components)
+	Entity CreateEntityWithData(const EntityType entityType, const ComponentTypes...components)
 	{
-		auto entityTypeInfo = GetEntityTypeInfo(entityType);
-		if (entityTypeInfo.Message == EntityTypeInfo::Message::NotFound)
+		EntityOperationResult entityOperationResult = GetEntityTypeInfo(entityType);
+		if (entityOperationResult.OperationResult == EntityOperationResult::Result::NotFound)
 		{
 			std::string name = std::format("EntityType{}", EntityTypesCreated);
-			std::cout << "Creating: " << name << std::endl;
-			entityTypeInfo = CreateEntityType<ComponentTypes...>(name);
+			entityOperationResult = CreateEntityType<ComponentTypes...>(name);
 		}
-		auto storage = EntityStorages.find(entityTypeInfo.TypeID)->second.get();
+		auto storage = EntityStorages.find(entityOperationResult.Type)->second.get();
 		storage->AddEntityToStorage(EntitiesCreated);
 		(CreateEntityComponent(storage, components), ...);
 
-		Entity createdEntity = Entity(EntitiesCreated, entityTypeInfo.TypeID);
+		Entity createdEntity = Entity(EntitiesCreated);
+		EntityTypeMap.insert(std::make_pair(EntitiesCreated, entityOperationResult.Type));
 		EntitiesCreated++;
 
 		return createdEntity;
 	}
 
 	template<typename...ComponentTypes>
-	EntityTypeInfo CreateEntityType(const std::string entityTypeName)
+	EntityOperationResult CreateEntityType(const std::string entityTypeName)
 	{
 		auto componentTypeIndexes = GatherTypeIndexes<ComponentTypes...>();
 		if (EntityWithComponentsExists(componentTypeIndexes))
@@ -94,39 +146,40 @@ public:
 			{
 				componentNames = std::format("{}, {}", componentNames, name);
 			}
-			return EntityTypeInfo(EntityTypeInfo::Message::Exists, (EntityTypeID)(-1), std::format("ERROR: EntityType with given components already exists. {}", componentNames));
+			return EntityOperationResult(EntityOperationResult::Result::Exists, (EntityType)(-1), std::format("ERROR: EntityType with given components already exists. {}", componentNames));
 		}
 		if (EntityTypeNameExists(entityTypeName))
 		{
-			return EntityTypeInfo(EntityTypeInfo::Message::Exists, (EntityTypeID)(-1), std::format("ERROR: EntityType with name \"{}\" already exists.", entityTypeName));
+			return EntityOperationResult(EntityOperationResult::Result::Exists, (EntityType)(-1), std::format("ERROR: EntityType with name \"{}\" already exists.", entityTypeName));
 		}
 
+		fmt::println("Creating new EntityType: {}", entityTypeName);
 		auto entityStoragePtr = CreateEntityTypeStorage(entityTypeName);
 		(AddComponentToEntityStorage<ComponentTypes>(entityStoragePtr), ...);
 
-		return EntityTypeInfo(EntityTypeInfo::Message::Created, entityStoragePtr->GetStorageEntityTypeID(), entityTypeName);
+		return EntityOperationResult(EntityOperationResult::Result::Created, entityStoragePtr->GetStorageEntityType(), entityTypeName);
 	}
 
-	EntityTypeInfo GetEntityTypeInfo(const EntityTypeID entityTypeId)
+	EntityOperationResult GetEntityTypeInfo(const EntityType entityType)
 	{
-		auto nameIt = EntityTypeNames.find(entityTypeId);
+		auto nameIt = EntityTypeNames.find(entityType);
 		if (nameIt != EntityTypeNames.end())
 		{
-			return EntityTypeInfo(EntityTypeInfo::Message::TypeFound, entityTypeId, nameIt->second);
+			return EntityOperationResult(EntityOperationResult::Result::TypeFound, entityType, nameIt->second);
 		}
 		
-		return EntityTypeInfo(EntityTypeInfo::Message::NotFound, entityTypeId, std::format("ERROR: Entity with typeID \"{}\" was not found.", entityTypeId));
+		return EntityOperationResult(EntityOperationResult::Result::NotFound, entityType, std::format("ERROR: Entity with typeID \"{}\" was not found.", entityType));
 	}
 
-	EntityTypeInfo GetEntityTypeInfo(const std::string entityTypeName)
+	EntityOperationResult GetEntityTypeInfo(const std::string entityTypeName)
 	{
 		auto info = std::find_if(EntityTypeNames.begin(), EntityTypeNames.end(),
 			[entityTypeName](const auto& pair) { return pair.second == entityTypeName; });
 		if (info != EntityTypeNames.end())
 		{
-			return EntityTypeInfo(EntityTypeInfo::Message::TypeFound, info->first, entityTypeName);
+			return EntityOperationResult(EntityOperationResult::Result::TypeFound, info->first, entityTypeName);
 		}
-		return EntityTypeInfo(EntityTypeInfo::Message::NotFound, (EntityTypeID)(-1), std::format("ERROR: Entity with typeName \"{}\" was not found.", entityTypeName));
+		return EntityOperationResult(EntityOperationResult::Result::NotFound, (EntityType)(-1), std::format("ERROR: Entity with typeName \"{}\" was not found.", entityTypeName));
 	}
 
 	bool EntityTypeNameExists(const std::string entityTypeName)
@@ -138,24 +191,30 @@ public:
 
 	bool EntityWithComponentsExists(const std::vector<std::type_index>& componentTypeIndexes)
 	{
-		EntityTypeID typeId = FindEntityTypeWithComponents(componentTypeIndexes);
+		EntityType typeId = FindEntityTypeWithComponents(componentTypeIndexes);
 		return typeId != -1;
 	}
 
 	//TODO: This is a brute force way to check compatible entities. Make this smarter in the future.
-	std::vector<EntityTypeID> GetEntityTypesWithComponentConditions(
+	std::vector<EntityType> GetEntityTypesWithComponentConditions(
 		const std::unordered_set<std::type_index> wantedReadOnlyTypes,
 		const std::unordered_set<std::type_index> wantedWriteReadTypes,
 		const std::unordered_set<std::type_index> forbiddenTypes)
 	{
-		std::vector<EntityTypeID> entityTypes;
+		std::vector<EntityType> entityTypes;
+
+		if (wantedReadOnlyTypes.size() == 0 && wantedWriteReadTypes.size() == 0)
+		{
+			return entityTypes;
+		}
+
 		for (auto const& pair : EntityStorages)
 		{
 			auto componentTypes = pair.second->GetEntityComponentTypes();
 			bool forbiddenFound = false;
 			for (auto const& type : forbiddenTypes)
 			{
-				bool forbiddenFound = (std::find(componentTypes.begin(), componentTypes.end(), type) != componentTypes.end());
+				forbiddenFound = (std::find(componentTypes.begin(), componentTypes.end(), type) != componentTypes.end());
 				if (forbiddenFound) { break; }
 			}
 			if (forbiddenFound) { continue; }
@@ -181,27 +240,27 @@ public:
 		return entityTypes;
 	}
 
-	EntitySpanFetchInfo GetEntityFetchInfo(EntityTypeID typeID)
+	EntitySpanFetchInfo GetEntityFetchInfo(EntityType typeID)
 	{
 		auto storage = EntityStorages.find(typeID);
-		EntitySpanFetchInfo info = { .TypeID = typeID, .EntityCount = storage->second->EntityCount, .EntityLocators = storage->second->GetStorageLocators() };
+		EntitySpanFetchInfo info = { .Type = typeID, .TypeName = EntityTypeNames.find(typeID)->second, .EntityCount = storage->second->EntityCount, .EntityLocators = storage->second->GetStorageLocators()};
 		return info;
 	}
 
-	std::vector<EntitySpanFetchInfo> GetEntityFetchInfo(std::vector<EntityTypeID> typeIDs)
+	std::vector<EntitySpanFetchInfo> GetEntityFetchInfo(std::vector<EntityType> typeIDs)
 	{
 		std::vector<EntitySpanFetchInfo> info;
 
 		for (auto id : typeIDs)
 		{
 			auto storage = EntityStorages.find(id);
-			info.push_back({ .TypeID = id, .EntityCount = storage->second->EntityCount, .EntityLocators = storage->second->GetStorageLocators() });
+			info.push_back({ .Type = id, .TypeName = EntityTypeNames.find(id)->second, .EntityCount = storage->second->EntityCount, .EntityLocators = storage->second->GetStorageLocators() });
 		}
 		return info;
 	}
 
 	template<typename ComponentType>
-	std::span<ComponentType const> GetEntityReadOnlyComponentSpan(const EntityID entityId)
+	std::span<ComponentType const> GetEntityReadOnlyComponentSpan(const Entity entityId)
 	{
 		auto storage = GetEntityStorage(entityId);
 		auto locator = storage->GetComponentStorageLocator<ComponentType>();
@@ -209,24 +268,80 @@ public:
 	}
 
 	template<typename ComponentType>
-	std::span<ComponentType> GetEntityWriteReadComponentSpan(const EntityID entityId)
+	std::span<ComponentType> GetEntityWriteReadComponentSpan(const Entity entityId)
 	{
 		auto storage = GetEntityStorage(entityId);
 		auto locator = storage->GetComponentStorageLocator<ComponentType>();
 		return WorldComponentManager->GetWriteReadStorageSpan<ComponentType>(locator);
 	}
 
-	EntityID GetEntityIdFromComponentIndex(EntityTypeID entityTypeId, EntityComponentIndex componentIndex)
+	Entity GetEntityIdFromComponentIndex(EntityType entityType, EntityComponentIndex componentIndex)
 	{
-		auto const& it = EntityStorages.find(entityTypeId);
+		auto const& it = EntityStorages.find(entityType);
 		return it->second->GetEntityIdFromComponentIndex(componentIndex);
 	}
 
+	size_t GetEntitiesCreatedCount()
+	{
+		return EntitiesCreated;
+	}
+
+	template<typename ComponentType>
+	ComponentType GetReadOnlyComponentFromEntity(Entity entity)
+	{
+		auto entityType = EntityTypeMap.find(entity);
+		if (entityType == EntityTypeMap.end())
+		{
+			fmt::println("ERROR: Entity with ID {} was not found", entity);
+			return {};
+		}
+		auto storageIt = EntityStorages.find(entityType->second);
+		if (storageIt == EntityStorages.end())
+		{
+			fmt::println("ERROR: Entity {} has invalid type in EntityTypeMap: {}", entity, entityType->second);
+			return {};
+		}
+		auto storage = storageIt->second.get();
+		ComponentStorageLocator locator = storage->GetComponentStorageLocator<ComponentType>;
+		EntityComponentIndex index = storage->GetEntityStorageID(entity);
+		return WorldComponentManager->GetReadOnlyComponentFromStorage(locator, index);
+	}
+
+	EntityComponentIndex GetEntityStorageID(Entity entity)
+	{
+		auto entityType = EntityTypeMap.find(entity);
+		if (entityType == EntityTypeMap.end())
+		{
+			fmt::println("ERROR: Entity with ID {} was not found", entity);
+			return {};
+		}
+		auto storageIt = EntityStorages.find(entityType->second);
+		if (storageIt == EntityStorages.end())
+		{
+			fmt::println("ERROR: Entity {} has invalid type in EntityTypeMap: {}", entity, entityType->second);
+			return {};
+		}
+		auto storage = storageIt->second.get();
+		return storage->GetEntityStorageID(entity);
+	};
+
+	EntityComponentIndex GetEntityStorageID(Entity entity, EntityType entityType)
+	{
+		auto storageIt = EntityStorages.find(entityType);
+		if (storageIt == EntityStorages.end())
+		{
+			fmt::println("ERROR: No storage found for given EntityType", entity, entityType);
+			return {};
+		}
+		auto storage = storageIt->second.get();
+		return storage->GetEntityStorageID(entity);
+	};
+
 protected:
 
-	EntityTypeStorage* GetEntityStorage(EntityTypeID entityTypeId)
+	EntityTypeStorage* GetEntityStorage(EntityType entityType)
 	{
-		auto const& it = EntityStorages.find(entityTypeId);
+		auto const& it = EntityStorages.find(entityType);
 		return it->second.get();
 	}
 
@@ -253,7 +368,7 @@ protected:
 
 	EntityTypeStorage* CreateEntityTypeStorage(const std::string entityTypeName)
 	{
-		EntityTypeID newTypeID = EntityTypesCreated++;
+		EntityType newTypeID = EntityTypesCreated++;
 		auto newStorage = std::make_unique<EntityTypeStorage>(newTypeID);
 		EntityTypeNames.insert(std::pair(newTypeID, entityTypeName));
 		auto storageIt = EntityStorages.insert(std::pair(newTypeID, std::move(newStorage)));
@@ -276,7 +391,7 @@ protected:
 		return componentTypeIndexes;
 	}
 
-	EntityTypeID FindEntityTypeWithComponents(const std::vector<std::type_index> &indexVector)
+	EntityType FindEntityTypeWithComponents(const std::vector<std::type_index> &indexVector)
 	{
 		auto foundStorage = std::find_if(EntityStorages.begin(), EntityStorages.end(),
 			[&indexVector](const auto& pair) { return pair.second->GetEntityComponentTypes() == indexVector; });
@@ -289,8 +404,9 @@ protected:
 
 private:
 	
-	std::map<EntityTypeID, std::string> EntityTypeNames;
-	std::map<EntityTypeID, std::unique_ptr<EntityTypeStorage>> EntityStorages;
+	std::unordered_map<Entity, EntityType> EntityTypeMap;
+	std::map<EntityType, std::string> EntityTypeNames;
+	std::map<EntityType, std::unique_ptr<EntityTypeStorage>> EntityStorages;
 	ComponentManager* WorldComponentManager;
 	size_t EntitiesCreated = 0;
 	size_t EntityTypesCreated = 0;

@@ -17,12 +17,15 @@ import Components.TransformComponent;
 import Components.MovementComponent;
 import Components.CameraComponent;
 import Components.MaterialComponent;
-import Components.TestReadOnlyComponent;
 
 import Systems.CameraControllerSystem;
 import Systems.InputSystem;
 import Systems.MovementSystem;
-import Systems.VulkanRenderSystem;
+import Systems.MovementSystemThreaded;
+import Systems.UnlitRenderSystem;
+import Systems.LitRenderSystem;
+import Systems.LitRenderSystemThreaded;
+import Systems.ModelMatrixBuilderSystem;
 
 import SystemData.CameraControllerSystem;
 import SystemData.InputSystem;
@@ -31,13 +34,15 @@ import <string>;
 import <vector>;
 
 export 
-std::vector<EntityTypeInfo> InitializeEngineEntities(EntityManager* EM)
+std::vector<EntityOperationResult> InitializeEngineEntities(EntityManager* EM)
 {
-	std::vector<EntityTypeInfo> InitializedTypes;
+	std::vector<EntityOperationResult> InitializedTypes;
 		
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MovementComponent, CameraComponent,TestReadOnlyComponent>("CameraEntity"));
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponent>("StaticSceneEntity"));
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponent, MovementComponent>("DynamicSceneEntity"));
+	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MovementComponent, CameraComponent>("CameraEntity"));
+	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentUnlit>("StaticSceneEntityUnlit"));
+	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentLit>("StaticSceneEntityLit"));
+	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentUnlit, MovementComponent>("DynamicSceneEntityUnlit"));
+	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentLit, MovementComponent>("DynamicSceneEntityLit"));
 
 	return InitializedTypes;
 }
@@ -45,12 +50,10 @@ std::vector<EntityTypeInfo> InitializeEngineEntities(EntityManager* EM)
 export
 void InitializeEngineSystems(EntityManager* EM, ComponentManager* CM, SystemManager* SM, WindowManager* WM, RenderCore* RC)
 {
-
-
 	// Input System
 	InputSystemData inputSystemData = {};
 	auto locator = CM->CreateSystemDataStorage(inputSystemData);
-	auto system = SM->AddSystem<InputSystem>("InputSystem", true);
+	auto system = SM->AddSystem<InputSystem>("InputSystem");
 	WM->GetMainWindow()->SubscribeToEvents([=](SDL_Event e) {system->AddEventToQueue(e); });
 
 	// Camera Controller System
@@ -58,18 +61,23 @@ void InitializeEngineSystems(EntityManager* EM, ComponentManager* CM, SystemMana
 	CameraControllerSystemData cameraSystemData =
 	{
 		.MainCamera = {},
+		.MainWindow = WM->GetMainWindow(),
 		.Yaw = -90,
 		.Pitch = 0,
 	};
 
 	locator = CM->CreateSystemDataStorage(cameraSystemData);
-	SM->AddSystem<CameraControllerSystem>("CameraControllerSystem", true);
+	SM->AddSystem<CameraControllerSystem>("CameraControllerSystem");
 
 	// Movement System
-	SM->AddSystem<MovementSystem>("MovementSystem", true);
-
+	SM->AddSystem<MovementSystemThreaded>("MovementSystem");
+	// Model matrix builder
+	SM->AddSystem<ModelMatrixBuilderSystem>("ModelMatrixBuilderSystem");
 	// Render System
-	SM->AddSystem<VulkanRenderSystem>("VulkanRenderSystem", true, RC);
+	SM->AddSystem<UnlitRenderSystem>("UnlitRenderSystem", RC);
+	// Render System
+	SM->AddSystem<LitRenderSystemThreaded>("LitRenderSystem", RC);
+	//SM->AddSystem<LitRenderSystem>("LitRenderSystem", RC);
 }
 
 export
@@ -100,23 +108,21 @@ void CreateEngineEntities(EntityManager* EM, ComponentManager* CM, SystemManager
 		.Front = glm::vec3(0.0f, 0.0f, 1.0f),
 		.Right = glm::vec3(1.0f, 0.0f, 0.0f),
 		.Up = glm::vec3(0.0f, 1.0f, 0.0f),
-		.Orientation = MatrixCalculations::CalculateLookAtMatrix(transform.Position, transform.Position + camera.Front, camera.Up),
-		.ProjectionMatrix = glm::mat4()
+		.View = MatrixCalculations::CalculateLookAtMatrix(transform.Position, transform.Position + camera.Front, camera.Up),
+		.Projection = glm::mat4()
 	};
 	bool ortho = false;
 	if (ortho)
 	{
-		camera.ProjectionMatrix = glm::ortho(-width / 2.0f, width / 2.0f, -height / 2.0f, height / 2.0f);
+		camera.Projection = glm::ortho(-width / 2.0f, width / 2.0f, -height / 2.0f, height / 2.0f);
 	}
 	else
 	{
-		camera.ProjectionMatrix = glm::perspective(glm::radians(fovAngle), width / height, near, far);
+		camera.Projection = glm::perspective(glm::radians(fovAngle), width / height, near, far);
 	}
 
-	TestReadOnlyComponent test = {};
-
-	Entity createdCamera = EM->CreateEntityWithData(transform, movement, camera, test);
-	CameraControllerSystemData* sd = CM->GetWriteReadSystemData<CameraControllerSystemData>();
-	sd->MainCamera = createdCamera;
+	Entity createdCamera = EM->CreateEntityWithData(transform, movement, camera);
+	CameraControllerSystemData& sd = CM->GetWriteReadSystemData<CameraControllerSystemData>()[0];
+	sd.MainCamera = createdCamera;
 
 }

@@ -48,13 +48,10 @@ public:
 	}
 
 	template<typename ComponentType>
-	ComponentType GetReadOnlySystemData()
+	std::span<ComponentType const> GetReadOnlySystemData()
 	{
 		std::type_index componentTypeId = typeid(ComponentType);
-		if (ThreadingProtectionCheckOngoing)
-		{
-			ThreadingProtectionReadOnlyComponentsAccessed.insert(componentTypeId);
-		}
+		RecordReadOnlyComponentAccess<ComponentType>();
 
 		auto it = SystemDataStorages.find(componentTypeId);
 		std::unique_ptr<IComponentStorage> const& storage= it->second;
@@ -64,29 +61,23 @@ public:
 	}
 
 	template<typename ComponentType>
-	ComponentType* GetWriteReadSystemData()
+	std::span<ComponentType> GetWriteReadSystemData()
 	{
 		std::type_index componentTypeId = typeid(ComponentType);
-		if (ThreadingProtectionCheckOngoing)
-		{
-			ThreadingProtectionWriteReadComponentsAccessed.insert(componentTypeId);
-		}
+		RecordWriteReadComponentAccess<ComponentType>();
+
 		auto it = SystemDataStorages.find(componentTypeId);
 		std::unique_ptr<IComponentStorage> const& storage = it->second;
 		SystemDataStorage<ComponentType>* storagePtr = static_cast<SystemDataStorage<ComponentType>*>(storage.get());
 
-		ComponentType* component = storagePtr->GetWriteRead();
-		return component;
+		return storagePtr->GetWriteRead();
 	}
 
 	template<typename ComponentType>
 	std::vector<std::span<ComponentType const>> GetReadOnlyComponentSpans()
 	{
 		std::type_index componentTypeId = typeid(ComponentType);
-		if (ThreadingProtectionCheckOngoing)
-		{
-			ThreadingProtectionReadOnlyComponentsAccessed.insert(componentTypeId);
-		}
+		RecordReadOnlyComponentAccess<ComponentType>();
 		std::vector<std::span<ComponentType const>> componentSpans;
 
 		std::vector<std::unique_ptr<IComponentStorage>> const& storagesVector = ComponentStorages.find(componentTypeId)->second;
@@ -102,10 +93,7 @@ public:
 	std::vector<std::span<ComponentType>> GetWriteReadComponentSpans()
 	{
 		std::type_index componentTypeId = typeid(ComponentType);
-		if (ThreadingProtectionCheckOngoing)
-		{
-			ThreadingProtectionWriteReadComponentsAccessed.insert(componentTypeId);
-		}
+		RecordWriteReadComponentAccess<ComponentType>();
 		std::vector<std::span<ComponentType>> componentSpans;
 
 		std::vector<std::unique_ptr<IComponentStorage>> const& storagesVector = ComponentStorages.find(componentTypeId)->second;
@@ -120,11 +108,7 @@ public:
 	template<typename ComponentType>
 	std::span<ComponentType const> GetReadOnlyStorageSpan(const ComponentStorageLocator locator)
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
-		if (ThreadingProtectionCheckOngoing)
-		{
-			ThreadingProtectionReadOnlyComponentsAccessed.insert(componentTypeId);
-		}
+		RecordReadOnlyComponentAccess<ComponentType>();
 		std::vector<std::span<ComponentType const>> componentSpans;
 
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
@@ -135,16 +119,32 @@ public:
 	template<typename ComponentType>
 	std::span<ComponentType> GetWriteReadStorageSpan(const ComponentStorageLocator locator)
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
-		if (ThreadingProtectionCheckOngoing)
-		{
-			ThreadingProtectionWriteReadComponentsAccessed.insert(componentTypeId);
-		}
+		RecordWriteReadComponentAccess<ComponentType>();
 		std::vector<std::span<ComponentType const>> componentSpans;
 
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		ComponentTypeStorage<ComponentType>* storagePtr = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
 		return storagePtr->GetStorageWriteReadSpan();
+	}
+
+	template<typename ComponentType>
+	void RecordReadOnlyComponentAccess()
+	{
+		std::type_index componentTypeId = typeid(ComponentType);
+		if (ThreadingProtectionCheckOngoing)
+		{
+			ThreadingProtectionReadOnlyComponentsAccessed.insert(componentTypeId);
+		}
+	}
+
+	template<typename ComponentType>
+	void RecordWriteReadComponentAccess()
+	{
+		std::type_index componentTypeId = typeid(ComponentType);
+		if (ThreadingProtectionCheckOngoing)
+		{
+			ThreadingProtectionWriteReadComponentsAccessed.insert(componentTypeId);
+		}
 	}
 
 protected:
@@ -182,6 +182,14 @@ protected:
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
 		storage->AddComponentToStorage(component);
+	}
+
+	template<typename ComponentType>
+	ComponentType GetReadOnlyComponentFromStorage(const ComponentStorageLocator locator, size_t index)
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		return storage->GetReadOnlyComponent(index) ;
 	}
 
 private:

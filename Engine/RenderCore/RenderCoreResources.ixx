@@ -1,14 +1,34 @@
 module;
 #include <vulkan/vulkan.h>
+#include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
 export module RenderCore.Resources;
 
 export import EncosyEngine.WindowManager;
 export import RenderCore.VulkanTypes;
+export import RenderCore.VulkanUtilities;
+export import RenderCore.VulkanDescriptors;
+
+
 export import <vector>;
 
+
+
 export constexpr unsigned int FRAME_OVERLAP = 2;
+
+
+export struct FrameData
+{
+	VkSemaphore vkSwapchainSemaphore, vkRenderSemaphore;
+	VkFence vkRenderFence;
+
+	VkCommandPool vkCommandPool;
+	VkCommandBuffer vkMainCommandBuffer;
+
+	DeletionQueue vkDeletionQueue;
+	DescriptorAllocatorGrowable vkFrameDescriptors;
+};
 
 export struct RenderCoreResources
 {
@@ -68,4 +88,14 @@ export struct RenderCoreResources
 	VkSampler DefaultSamplerLinear;
 	VkSampler DefaultSamplerNearest;
 
+	// Global lighting data
+	LitLightingData GlobalLightingData =
+	{
+		.ambientLightColor = glm::vec3(1.0f, 1.0f, 1.0f),
+		.ambientLightStrength = 0.1f,
+		.directionalLightDir = glm::vec3(-0.5f, -1.0f, -0.5f),
+		.directionalLightStrength = 1.0f,
+		.directionalLightColor = glm::vec3(1.0f, 1.0f, 1.0f),
+	};
+	
 };

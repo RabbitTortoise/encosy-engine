@@ -7,43 +7,7 @@ module;
 
 export module RenderCore.VulkanTypes;
 
-import RenderCore.VulkanDescriptors;
-
 import <vector>;
-import <functional>;
-import <deque>;
-
-export 
-struct DeletionQueue
-{
-	std::deque<std::function<void()>> Deletors;
-
-	void push_back(std::function<void()>&& function) {
-		Deletors.push_back(function);
-	}
-
-	void flush() {
-		// Reverse iterate the deletion queue to execute all the functions
-		for (auto it = Deletors.rbegin(); it != Deletors.rend(); it++) {
-			std::invoke(*it); // Call functors
-		}
-
-		Deletors.clear();
-	}
-};
-
-export
-struct FrameData
-{
-	VkSemaphore vkSwapchainSemaphore, vkRenderSemaphore;
-	VkFence vkRenderFence;
-
-	VkCommandPool vkCommandPool;
-	VkCommandBuffer vkMainCommandBuffer;
-
-	DeletionQueue vkDeletionQueue;
-	DescriptorAllocatorGrowable vkFrameDescriptors;
-};
 
 export
 struct AllocatedImage {
@@ -99,10 +63,25 @@ struct GPUMeshBuffers {
 	VkDeviceAddress vertexBufferAddress;
 };
 
+// Holds the resources needed for a mesh
+export
+struct GPUModelMatrixBuffer {
+
+	AllocatedBuffer matrixBuffer;
+	VkDeviceAddress matrixBufferAddress;
+};
+
 export
 struct VertexBufferPushConstants
 {
 	VkDeviceAddress vertexBuffer;
+};
+
+export
+struct InstancedPushConstants
+{
+	VkDeviceAddress vertexBufferAddress;
+	VkDeviceAddress modelMatrixBufferAddress;
 };
 
 export
@@ -112,6 +91,32 @@ struct CameraData
 	glm::mat4 proj;
 	glm::mat4 viewproj;
 };
+
+export
+struct LitLightingData
+{
+	glm::vec3 ambientLightColor;
+	float ambientLightStrength;
+	glm::vec3 directionalLightDir;
+	float directionalLightStrength;
+	glm::vec3 directionalLightColor;
+};
+
+export
+struct LitLightingDataInShader
+{
+	glm::vec4 ambientLightColor;
+	glm::vec4 directionalLightColor;
+	glm::vec4 directionalLightDir;
+};
+
+export
+struct TextureOptions
+{
+	float textureRepeat;
+};
+
+
 
 export typedef size_t MeshID;
 export typedef size_t TextureID;

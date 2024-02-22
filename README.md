@@ -4,6 +4,8 @@ This is the game engine I have been working on as part of my studies. I've used 
 It is made using C++20 and uses Vulkan as the graphics API. It uses the C++20 modules. Which currently makes development harder, as Intellisense doesn't really want to co-operate with modules yet.  
 I'm currently working on implementing more Vulkan graphics features and a graphical demo as part of my last projects studies. As my thesis I'm researching how to add multithreading capabilities to the engine.
 
+Currently the engine has rendering with simple lighting and it uses instanced rendering. Some of the thesis multithreading functionality is already there too and is used in various places.
+
 ## Getting started
 
 ### Requirements
@@ -22,6 +24,9 @@ I'm currently working on implementing more Vulkan graphics features and a graphi
 - git submodule update
 3. Build the project files using CMake. Always use "Build" as the name of the build folder and put it in the same folder as CMakeLists.txt
 4. Select EncosyGame as startup project and build the binaries with Visual Studio
+
+Automatic copying of resources during build does not work properly. If the game does not start copy encosy-engine/Game/Resources folder to encosy-engine/Build/Debug/Game, and encosy-engine/Engine/Resources folder to encosy-engine/Build/Debug/Engine.
+When building in Release mode, do the same but just for the encosy-engine/Build/Release -directory.
 
 
 ## Libraries used
@@ -72,4 +77,4 @@ Comes with the Vulkan SDK installer
 
 ## Special thanks
 The best tutorial to Vulkan I found: https://vkguide.dev/
-Many parts of the renderer are similar to this tutorial, but I have adapted them to work better in my engine.
+Some helper classes and builders are copied from the guide, but I have adapted them to work better in my engine.

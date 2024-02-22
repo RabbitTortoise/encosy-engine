@@ -71,6 +71,15 @@ protected:
 		return nullptr;
 	}
 
+	ComponentType GetReadOnlyComponent(const size_t id)
+	{
+		if (id < GetComponentCount())
+		{
+			return Storage->at(id);
+		}
+		return {};
+	}
+
 	/// <summary>
 	/// Removes component from specific index
 	/// </summary>
@@ -122,7 +131,11 @@ class SystemDataStorage : public IComponentStorage
 	friend class EntityTypeStorage;
 
 public:
-	SystemDataStorage(){}
+	SystemDataStorage()
+	{
+		SystemDataComponent.reserve(1);
+		SystemDataComponent.push_back(ComponentType{});
+	}
 	~SystemDataStorage() {}
 
 	size_t GetComponentCount()
@@ -134,22 +147,20 @@ protected:
 
 	void SetComponentData(const ComponentType component)
 	{
-		SystemDataComponent = component;
+		SystemDataComponent[0] = component;
 	}
 
-	ComponentType GetReadOnly()
+	std::span<ComponentType const> GetReadOnly()
 	{
 		return SystemDataComponent;
 	}
 
-	ComponentType* GetWriteRead()
+	std::span<ComponentType> GetWriteRead()
 	{
-		return &SystemDataComponent;
+		return SystemDataComponent;
 	}
 
 
 private:
-
-
-	ComponentType SystemDataComponent;
+	std::vector<ComponentType> SystemDataComponent;
 };
