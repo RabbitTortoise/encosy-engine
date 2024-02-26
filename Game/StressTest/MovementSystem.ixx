@@ -1,13 +1,14 @@
 module;
 #include <glm/glm.hpp>	
+#include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module Systems.MovementSystem;
+export module StressTest.Systems.MovementSystem;
 
 import ECS.Entity;
 import ECS.System;
 import Components.TransformComponent;
-import Components.MovementComponent;
+import StressTest.Components.MovementComponent;
 import Components.CameraComponent;
 import EncosyEngine.MatrixCalculations;
 import SystemData.InputSystem;
@@ -59,6 +60,12 @@ protected:
 
 		TransformComponent& tc = GetCurrentEntityComponent(&TransformComponents);
 		MovementComponent& mc = GetCurrentEntityComponent(&MovementComponents);
+
+		if (input.Spacebar) { return; } // Continue only if spacebar is not pressed
+		if (input.Return)
+		{
+			tc.Orientation = glm::quat_cast(mainCamera.View);
+		}
 
 		tc.Orientation = MatrixCalculations::RotateByWorldAxisX(tc.Orientation, mc.Speed * mc.Direction.x * deltaTime);
 		tc.Orientation = MatrixCalculations::RotateByWorldAxisY(tc.Orientation, mc.Speed * mc.Direction.y * deltaTime);

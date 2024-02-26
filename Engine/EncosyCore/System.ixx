@@ -498,14 +498,7 @@ public:
 	void AddWantedComponentDataForWriting(WriteReadComponentStorage<ComponentType>* writeReadStorage, ThreadComponentStorage<ComponentType>* threadStorage)
 	{
 		AddWriteReadComponentFetcher(&writeReadStorage->Storage);
-
-		threadStorage->Storage = std::vector<std::vector<std::vector<ComponentType>>>(ThreadCount);
-		for (size_t thread = 0; thread < ThreadCount; thread++)
-		{
-			AddThreadDataCopierForWriting(thread,
-				&writeReadStorage->Storage,
-				&threadStorage->Storage[thread]);
-		}
+		AddThreadDataCopierForWriting(writeReadStorage, threadStorage);
 	}
 
 	template <typename ComponentType>
@@ -641,17 +634,29 @@ private:
 	}
 
 	template <typename ComponentType>
-	void AddThreadDataCopierForWriting(int thread,
-		std::vector<std::span<ComponentType>>* storage,
-		std::vector<std::vector<ComponentType>>* threadStorage)
+	void AddThreadDataCopierForWriting(
+		WriteReadComponentStorage<ComponentType>* writeReadStorage, 
+		ThreadComponentStorage<ComponentType>* threadCopyStorage)
 	{
+		threadCopyStorage->Storage = std::vector<std::vector<std::vector<ComponentType>>>(ThreadCount);
 
 		auto copier = [=]() {
-			ThreadDataCopier(thread, std::as_const(storage), threadStorage);
+			auto* storage = &writeReadStorage->Storage;
+			for (size_t thread = 0; thread < ThreadCount; thread++)
+			{
+				auto* threadStorage = &threadCopyStorage->Storage[thread];
+				ThreadDataCopier(thread, std::as_const(storage), threadStorage);
+			}
 			};
 		ThreadCopyFunctions.push_back(copier);
+
 		auto saver = [=]() {
-			ThreadDataSaver(thread, storage, threadStorage);
+			auto* storage = &writeReadStorage->Storage;
+			for (size_t thread = 0; thread < ThreadCount; thread++)
+			{
+				auto* threadStorage = &threadCopyStorage->Storage[thread];
+				ThreadDataSaver(thread, std::as_const(storage), threadStorage);
+			}
 			};
 		ThreadSaveFunctions.push_back(saver);
 	}
@@ -661,11 +666,10 @@ private:
 		const std::vector<std::span<ComponentType>>* componentSpans,
 		std::vector<std::vector<ComponentType>>* threadStorages)
 	{
-		threadStorages->clear();
 		const std::vector<DataOffsets>& threadOffsets = ThreadDataOffsets[thread];
 		if (threadOffsets.size() == 0) { return; }
-		
-		*threadStorages = std::vector<std::vector<ComponentType>>(componentSpans->size());
+
+		*threadStorages = std::vector<std::vector<ComponentType>>(componentSpans->size());	
 		for (size_t i = 0; i < threadOffsets.size(); i++)
 		{
 			const auto& offset = threadOffsets[i];
@@ -695,8 +699,6 @@ private:
 			auto end = storage.end();
 			auto spanIt = span.begin() + offset.startOffset;
 			std::ranges::copy(storage, spanIt);
-			auto begin2 = spanIt;
-
 		}
 	}
 

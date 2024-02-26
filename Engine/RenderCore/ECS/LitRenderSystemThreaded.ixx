@@ -74,9 +74,43 @@ protected:
 		
 		CameraEntityType = cameraEntityInfo.Type;
 
+		BuiltInstances = std::vector<InstanceProperties>();
+		InstanceThreadVectors = std::vector<std::vector<InstanceProperties>>(GetThreadCount(), std::vector<InstanceProperties>());
+		ThreadData = std::vector<ThreadInstanceCalculationData>(GetThreadCount(), ThreadInstanceCalculationData());
+
 	};
 
-	void PreUpdate(float deltaTime) override {};
+	void PreUpdate(float deltaTime) override 
+	{
+		int threadCount = GetThreadCount();
+		for (auto& instanceVector : InstanceThreadVectors)
+		{
+			instanceVector.clear();
+		}
+
+		for (size_t i = 0; i < BuiltInstances.size(); i++)
+		{
+			auto& builtInstance = BuiltInstances[i];
+			size_t size = builtInstance.ModelMatrices.size();
+			if (builtInstance.ModelMatrices.capacity() - size > 100)
+			{
+				builtInstance.ModelMatrices.clear();
+				builtInstance.ModelMatrices.resize(size);
+			}
+			else { builtInstance.ModelMatrices.clear(); }
+
+			for (auto& instanceVector : InstanceThreadVectors)
+			{
+				instanceVector.emplace_back(InstanceProperties(builtInstance.Material, std::vector<glm::mat4>()));
+				instanceVector[i].ModelMatrices.reserve(size / threadCount * 2);
+			}
+		}
+		for (auto& data : ThreadData)
+		{
+			data.previousInstanceIndex = 0;
+		}
+			
+	};
 	void Update(float deltaTime) override 
 	{
 
@@ -84,18 +118,15 @@ protected:
 		CurrentCameraComponent = GetEntityComponent(csData.MainCamera, CameraEntityType, &CameraEntityComponents);
 
 		// Calculate instanced with threading:
-		BuiltInstances = std::vector<InstanceProperties>();
-		InstanceThreadVectors = std::vector<std::vector<InstanceProperties>>(GetThreadCount(), std::vector<InstanceProperties>());
-		ThreadData = std::vector<ThreadInstanceCalculationData>(GetThreadCount(), ThreadInstanceCalculationData());
 		ExecutePerEntityThreaded(std::bind_front(&LitRenderSystemThreaded::InstanceBuilder, this));
-
+		std::vector<size_t> InstanceEntityCounts = std::vector<size_t>(GetThreadCount(), 0);
 
 		// Manually save results from threaded calculations
 		for (size_t i = 0; i < InstanceThreadVectors.size(); i++)
 		{
-			auto instanceVector = InstanceThreadVectors[i];
+			auto& instanceVector = InstanceThreadVectors[i];
 			for (const auto& threadInstance : instanceVector)
-			{
+				{
 				bool found = false;
 				for (auto& builtInstance : BuiltInstances)
 				{
@@ -112,6 +143,16 @@ protected:
 				}
 			}
 		}
+		for (size_t i = BuiltInstances.size(); i > 0;)
+		{
+			i--;
+			auto& instance = BuiltInstances[i];
+			if (instance.ModelMatrices.empty())
+			{
+				BuiltInstances.erase(BuiltInstances.begin() + i);
+			}
+		}
+
 
 		RenderInstanced();
 	};
@@ -128,22 +169,22 @@ protected:
 		glm::mat4 modelMatrix = matrix.ModelMatrix;
 
 
-		if (previousInstanceIndex == -1)
+		if (threadInstance.size() == 0)
 		{
 			InstanceProperties newInstances;
 			newInstances.Material = mc;
 			newInstances.ModelMatrices = std::vector<glm::mat4>();
-			threadInstance.push_back(newInstances);
-			threadInstance[0].ModelMatrices.push_back(modelMatrix);
+			threadInstance.emplace_back(newInstances);
+			threadInstance[0].ModelMatrices.emplace_back(modelMatrix);
 			previousInstanceIndex = 0;
 			return;
 		}
 
-		InstanceProperties previousInstance = threadInstance[previousInstanceIndex];
+		InstanceProperties& previousInstance = threadInstance[previousInstanceIndex];
 
 		if (AreMaterialComponentsEqual(previousInstance.Material, mc))
 		{
-			threadInstance[previousInstanceIndex].ModelMatrices.push_back(modelMatrix);
+			threadInstance[previousInstanceIndex].ModelMatrices.emplace_back(modelMatrix);
 			return;
 		}
 
@@ -159,18 +200,15 @@ protected:
 		}
 		if (correctInstance == -1)
 		{
-			InstanceProperties newInstances = InstanceProperties();
-			newInstances.Material = mc;
-			newInstances.ModelMatrices = std::vector<glm::mat4>();
-			threadInstance.push_back(newInstances);
+			threadInstance.emplace_back(InstanceProperties(mc, {}));
 			previousInstanceIndex += 1;
-			threadInstance[previousInstanceIndex].ModelMatrices.push_back(modelMatrix);
+			threadInstance[previousInstanceIndex].ModelMatrices.emplace_back(modelMatrix);
 			previousInstanceIndex = previousInstanceIndex;
 			return;
 		}
 		else
 		{
-			threadInstance[correctInstance].ModelMatrices.push_back(modelMatrix);
+			threadInstance[correctInstance].ModelMatrices.emplace_back(modelMatrix);
 			previousInstanceIndex = correctInstance;
 		}
 	}

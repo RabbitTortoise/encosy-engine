@@ -14,14 +14,11 @@ import EncosyEngine.RenderCore;
 import EncosyEngine.MatrixCalculations;
 
 import Components.TransformComponent;
-import Components.MovementComponent;
 import Components.CameraComponent;
 import Components.MaterialComponent;
 
 import Systems.CameraControllerSystem;
 import Systems.InputSystem;
-import Systems.MovementSystem;
-import Systems.MovementSystemThreaded;
 import Systems.UnlitRenderSystem;
 import Systems.LitRenderSystem;
 import Systems.LitRenderSystemThreaded;
@@ -38,11 +35,9 @@ std::vector<EntityOperationResult> InitializeEngineEntities(EntityManager* EM)
 {
 	std::vector<EntityOperationResult> InitializedTypes;
 		
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MovementComponent, CameraComponent>("CameraEntity"));
+	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, CameraComponent>("CameraEntity"));
 	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentUnlit>("StaticSceneEntityUnlit"));
 	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentLit>("StaticSceneEntityLit"));
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentUnlit, MovementComponent>("DynamicSceneEntityUnlit"));
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentLit, MovementComponent>("DynamicSceneEntityLit"));
 
 	return InitializedTypes;
 }
@@ -63,14 +58,12 @@ void InitializeEngineSystems(EntityManager* EM, ComponentManager* CM, SystemMana
 		.MainCamera = {},
 		.MainWindow = WM->GetMainWindow(),
 		.Yaw = -90,
-		.Pitch = 0,
+		.Pitch = 40,
 	};
 
 	locator = CM->CreateSystemDataStorage(cameraSystemData);
 	SM->AddSystem<CameraControllerSystem>("CameraControllerSystem");
 
-	// Movement System
-	SM->AddSystem<MovementSystemThreaded>("MovementSystem");
 	// Model matrix builder
 	SM->AddSystem<ModelMatrixBuilderSystem>("ModelMatrixBuilderSystem");
 	// Render System
@@ -95,11 +88,6 @@ void CreateEngineEntities(EntityManager* EM, ComponentManager* CM, SystemManager
 		.Scale = glm::vec3(1.0f, 1.0f, 1.0f),
 		.Orientation = glm::quat(0.0f, 0.0f, 0.0f, 1.0f)
 	};
-	MovementComponent movement =
-	{
-		.Direction = glm::vec3(0.0f, 0.0f, 0.0f),
-		.Speed = 2.0f
-	};
 	CameraComponent camera =
 	{
 		.Fov = fovAngle,
@@ -121,7 +109,7 @@ void CreateEngineEntities(EntityManager* EM, ComponentManager* CM, SystemManager
 		camera.Projection = glm::perspective(glm::radians(fovAngle), width / height, near, far);
 	}
 
-	Entity createdCamera = EM->CreateEntityWithData(transform, movement, camera);
+	Entity createdCamera = EM->CreateEntityWithData(transform, camera);
 	CameraControllerSystemData& sd = CM->GetWriteReadSystemData<CameraControllerSystemData>()[0];
 	sd.MainCamera = createdCamera;
 

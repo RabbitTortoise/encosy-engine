@@ -9,7 +9,6 @@ export module Systems.CameraControllerSystem;
 import ECS.Entity;
 import ECS.System;
 import Components.TransformComponent;
-import Components.MovementComponent;
 import Components.CameraComponent;
 import SystemData.CameraControllerSystem;
 import SystemData.InputSystem;
@@ -40,7 +39,6 @@ protected:
 		AddSystemDataForWriting(&CameraSystemDataComponent);
 
 		AddWantedComponentDataForWriting(&TransformComponents);
-		AddWantedComponentDataForWriting(&MovementComponents);
 		AddWantedComponentDataForWriting(&CameraComponents);
 
 	}
@@ -50,10 +48,9 @@ protected:
 	{
 
 		TransformComponent& transformComponent = GetCurrentEntityComponent(&TransformComponents);
-		MovementComponent& movementComponent = GetCurrentEntityComponent(&MovementComponents);
 		CameraComponent& cameraComponent = GetCurrentEntityComponent(&CameraComponents);
 
-		UpdateCamera(deltaTime, entity, transformComponent, movementComponent, cameraComponent);
+		UpdateCamera(deltaTime, entity, transformComponent, cameraComponent);
 	}
 
 	void PostUpdate(float deltaTime) override {}
@@ -63,7 +60,6 @@ protected:
 	void UpdateCamera(float deltaTime, 
 		Entity entity,
 		TransformComponent& transformComponent, 
-		MovementComponent& movementComponent,
 		CameraComponent& cameraComponent)
 	{
 		CameraControllerSystemData& controllerData = CameraSystemDataComponent.Storage[0];
@@ -75,16 +71,16 @@ protected:
 		if (inputData.MouseRightDown)
 		{
 			controllerData.MainWindow->SetRelativeMouseMode(true);
-			controllerData.Yaw += (float)inputData.MouseRelativeMotion.x * 50.0f * deltaTime;
-			controllerData.Pitch -= (float)inputData.MouseRelativeMotion.y * 50.0f * deltaTime;
+			controllerData.Yaw += (float)inputData.MouseRelativeMotion.x * 60.0f * deltaTime;
+			controllerData.Pitch -= (float)inputData.MouseRelativeMotion.y * 60.0f * deltaTime;
 
 			if (controllerData.Pitch > 89.0f)
 				controllerData.Pitch = 89.0f;
 			if (controllerData.Pitch < -89.0f)
 				controllerData.Pitch = -89.0f;
 
-			rotateX = (float)inputData.MouseRelativeMotion.x * 50.0f * deltaTime;
-			rotateY = (float)inputData.MouseRelativeMotion.y * 50.0f * deltaTime;
+			//rotateX = (float)inputData.MouseRelativeMotion.x * 50.0f * deltaTime;
+			//rotateY = (float)inputData.MouseRelativeMotion.y * 50.0f * deltaTime;
 		}
 		else
 		{
@@ -116,21 +112,22 @@ protected:
 		//Debug Camera Movement
 		if (entity == controllerData.MainCamera)
 		{
-			movementComponent.Direction = glm::vec3(0, 0, 0);
+			auto direction = glm::vec3(0, 0, 0);
+			float speed = 2.5f;
 			float speedMultiplier = 1.0f;
 
 				
-			if (inputData.W) { movementComponent.Direction += cameraComponent.Front; }
-			if (inputData.S) { movementComponent.Direction += -cameraComponent.Front; }
-			if (inputData.A) { movementComponent.Direction += -cameraComponent.Right; }
-			if (inputData.D) { movementComponent.Direction += cameraComponent.Right; }
-			if (inputData.Q) { movementComponent.Direction += WorldUp; }
-			if (inputData.E) { movementComponent.Direction += -WorldUp; }
+			if (inputData.W) { direction += cameraComponent.Front; }
+			if (inputData.S) { direction += -cameraComponent.Front; }
+			if (inputData.A) { direction += -cameraComponent.Right; }
+			if (inputData.D) { direction += cameraComponent.Right; }
+			if (inputData.Q) { direction += WorldUp; }
+			if (inputData.E) { direction += -WorldUp; }
 			if (inputData.Left_Shift) { speedMultiplier += 2.0f; }
-			if (inputData.Left_Control) { speedMultiplier -= 0.5f; }
-			glm::normalize(movementComponent.Direction);
+			if (inputData.Left_Control) { speedMultiplier -= 0.25f; }
+			glm::normalize(direction);
 
-			transformComponent.Position += movementComponent.Direction * movementComponent.Speed * speedMultiplier * deltaTime;
+			transformComponent.Position += direction * speed * speedMultiplier * deltaTime;
 			cameraComponent.View = MatrixCalculations::CalculateLookAtMatrix(transformComponent.Position, transformComponent.Position + cameraComponent.Front, cameraComponent.Up);
 
 			//fmt::println("POS:  {},{},{}", transformComponent.Position.x, transformComponent.Position.y, transformComponent.Position.z);
@@ -139,7 +136,6 @@ protected:
 	
 private:
 	WriteReadComponentStorage<TransformComponent> TransformComponents;
-	WriteReadComponentStorage<MovementComponent> MovementComponents;
 	WriteReadComponentStorage<CameraComponent> CameraComponents;
 
 	WriteReadSystemDataStorage<CameraControllerSystemData> CameraSystemDataComponent;

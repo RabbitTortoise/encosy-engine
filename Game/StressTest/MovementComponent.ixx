@@ -1,7 +1,7 @@
 module;
 #include <glm/glm.hpp>
 
-export module Components.MovementComponent;
+export module StressTest.Components.MovementComponent;
 
 export struct MovementComponent
 {

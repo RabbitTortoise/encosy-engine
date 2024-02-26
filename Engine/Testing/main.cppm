@@ -14,9 +14,9 @@ import EncosyEngine.EncosyCore;
 import EncosyEngine.RenderCore;
 import EncosyEngine.MatrixCalculations;
 import Components.TransformComponent;
-import Components.MovementComponent;
 import Components.CameraComponent;
 import Components.MaterialComponent;
+import Components.ModelMatrixComponent;
 
 import EncosyCore.ThreadedTaskRunner;
 import RenderCore.MeshLoader;
@@ -116,7 +116,10 @@ void InitializeTestEntities()
 		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Quad),
 		.TextureRepeat = 2.0f
 	};
-	WorldEntityManager->CreateEntityWithData(tc, mc);
+
+	ModelMatrixComponent model = {};
+
+	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 
 	mc = {
 		.Diffuse = error,
@@ -129,12 +132,7 @@ void InitializeTestEntities()
 	.Orientation = glm::quat(glm::vec3(90,90,90)),
 	};
 
-	MovementComponent movc = {
-		.Direction = glm::vec3(0,0,0),
-		.Speed = 0.0f
-	};
-
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 
 	tc = {
 	.Position = glm::vec3(2,1,2),
@@ -142,7 +140,7 @@ void InitializeTestEntities()
 	.Orientation = glm::quat(glm::vec3(90,0,0)),
 	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 
 	tc = {
 	.Position = glm::vec3(-2,1,2),
@@ -150,7 +148,7 @@ void InitializeTestEntities()
 	.Orientation = glm::quat(glm::vec3(0,0,90)),
 	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 
 	tc = {
 	.Position = glm::vec3(2,1,-2),
@@ -158,7 +156,7 @@ void InitializeTestEntities()
 	.Orientation = glm::quat(glm::vec3(0,90,0)),
 	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 
 	tc = {
 	.Position = glm::vec3(0,4,0),
@@ -166,7 +164,7 @@ void InitializeTestEntities()
 	.Orientation = glm::quat(glm::vec3(0,0,0)),
 	};
 
-	WorldEntityManager->CreateEntityWithData(tc, mc, movc);
+	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 
 }
 
@@ -177,7 +175,7 @@ int main()
     
 	EncosyEngine::InitializeEngine();
 
-	TestThreadedTaskRunner();
+	//TestThreadedTaskRunner();
 	//Tests();
 	InitializeTestEntities();
 

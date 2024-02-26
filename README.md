@@ -9,12 +9,16 @@ Currently the engine has rendering with simple lighting and it uses instanced re
 ## Getting started
 
 ### Requirements
+Due to usage of C++20 modules, the project requires new tools to even compile.
+
 1. Windows 10/11 
-2. Visual Studio 2022
+2. Visual Studio 2022 (17.9.0 tested to work)
 - Desktop Development with C++
 - C++ Modules for v143 build tools
 3. GPU with Resizable BAR enabled
 - Project should still work without one as the allocated buffers are still small. But the rendering engine is built with the assumption that the CPU can address the whole GPU memory via Resizable BAR.
+4. Vulkan SDK 1.3.275 or newer. You have to install vma with the SDK installer!. 
+5. CMake 3.28 or newer.
 
 
 ### Setting up the project
@@ -22,12 +26,18 @@ Currently the engine has rendering with simple lighting and it uses instanced re
 2. Run following commands:
 - git submodule init
 - git submodule update
-3. Build the project files using CMake. Always use "Build" as the name of the build folder and put it in the same folder as CMakeLists.txt
+3. Build the project files using CMake
 4. Select EncosyGame as startup project and build the binaries with Visual Studio
 
 Automatic copying of resources during build does not work properly. If the game does not start copy encosy-engine/Game/Resources folder to encosy-engine/Build/Debug/Game, and encosy-engine/Engine/Resources folder to encosy-engine/Build/Debug/Engine.
 When building in Release mode, do the same but just for the encosy-engine/Build/Release -directory.
 
+
+### Demo controls
+Currently there is one demo availble inside EncosyGame -project called StressTest. By default it spans 8k entities with randomized material and mesh.  
+WASD: Move around.  
+Q/E: Move up/down.  
+Right mouse button: Look around.  
 
 ## Libraries used
 Note: Most of the libraries are downloaded using git submodules. If a a library does not work try switching it to a release version specified below:
@@ -65,7 +75,7 @@ Version: Correct header version included in the files.
 ### vk-bootstrap
 https://github.com/charles-lunarg/vk-bootstrap  
 MIT License  
-Version: 1.3.277  
+Version: 1.3.275  
 
 ### Vulkan SDK 1.3
 Download and install from https://vulkan.lunarg.com/  
@@ -73,6 +83,7 @@ Download and install from https://vulkan.lunarg.com/
 
 ### vma
 Vulkan Memory Allocator  
+MIT License
 Comes with the Vulkan SDK installer
 
 ## Special thanks

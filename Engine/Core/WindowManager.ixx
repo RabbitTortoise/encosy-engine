@@ -118,11 +118,18 @@ public:
     WindowManager() {}
     ~WindowManager() { DestroyMainWindow(); }
 
-    bool CreateMainWindow(std::string title = "EncosyEngine", int width = 1920, int height = 1080)
+    bool CreateMainWindow(std::string title = "EncosyEngine", bool fullscreen = false, int width = 1920, int height = 1080)
     {
        if (MainWindow.Window == nullptr)
         {
-            MainWindow.Window = SDL_CreateWindow(title.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+           if (fullscreen)
+           {
+               MainWindow.Window = SDL_CreateWindow(title.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_FULLSCREEN);
+           }
+           else
+           {
+               MainWindow.Window = SDL_CreateWindow(title.c_str(), width, height, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+           }
             if (MainWindow.Window == nullptr)
             {
                 fmt::println("ERROR: Window creation failed!");

@@ -367,6 +367,7 @@ private:
 			.set_required_features_13(features)
 			.set_required_features_12(features12)
 			.set_surface(Resources.vkSurface)
+			.required_device_memory_size(VkDeviceSize(4000000000))
 			.select()
 			.value();
 
