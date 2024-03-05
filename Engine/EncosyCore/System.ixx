@@ -24,7 +24,7 @@ import <algorithm>;
 
 
 export typedef size_t SystemID;
-export enum class SystemType { System = 0, RenderSystem, PhysicsSystem, ThreadedSystem };
+export enum class SystemType { System = 0, RenderSystem, PhysicsSystem };
 
 export
 template <typename ComponentType>
@@ -103,9 +103,9 @@ public:
 protected:
 
 	virtual void Init() = 0;
-	virtual void PreUpdate(float deltaTime) = 0;
-	virtual void Update(float deltaTime) = 0;
-	virtual void PostUpdate(float deltaTime) = 0;
+	virtual void PreUpdate(const double deltaTime) = 0;
+	virtual void Update(const double deltaTime) = 0;
+	virtual void PostUpdate(const double deltaTime) = 0;
 	virtual void Destroy() = 0;
 
 	template <typename ComponentType>
@@ -116,7 +116,7 @@ protected:
 	}
 
 private:
-	virtual void SystemUpdate(float deltaTime) = 0;
+	virtual void SystemUpdate(const double deltaTime) = 0;
 	void SetInitialized(bool initialized) { bInitialized = initialized; }
 	void SetEnabled(bool enabled) { bEnabled = enabled; }
 
@@ -192,7 +192,7 @@ private:
 	}
 
 	template <typename ComponentType>
-	void AddWriteReadAlwaysFetch(EntityType typeID, std::span<ComponentType>* storage)
+	void AddWriteReadAlwaysFetchEntityType(EntityType typeID, std::span<ComponentType>* storage)
 	{
 		auto& id = typeid(ComponentType);
 		EntitySpanFetchInfo FetchedEntityInfo = WorldEntityManager->GetEntityFetchInfo(typeID);
@@ -201,14 +201,14 @@ private:
 		AlwaysFetchedWriteReadComponentTypes.insert(id);
 
 		std::function<void()>  fetcher = [=]() {
-			WriteReadAlwaysFetcher<ComponentType>(typeID, storage);
+			WriteReadEntitiesFetcher<ComponentType>(typeID, storage);
 			};
 
 		FetchFunctions.push_back(fetcher);
 	}
 
 	template <typename ComponentType>
-	void WriteReadAlwaysFetcher(EntityType typeID, std::span<ComponentType>* span)
+	void WriteReadEntitiesFetcher(EntityType typeID, std::span<ComponentType>* span)
 	{
 		std::span<ComponentType> fetchedSpan = WorldEntityManager->GetEntityReadOnlyComponentSpan<ComponentType>(typeID);
 		*span = fetchedSpan;
@@ -216,7 +216,7 @@ private:
 
 
 	template <typename ComponentType>
-	void AddReadOnlyAlwaysFetch(EntityType typeID, std::span<ComponentType const>* storage)
+	void AddReadOnlyAlwaysFetchEntityType(EntityType typeID, std::span<ComponentType const>* storage)
 	{
 		auto& id = typeid(ComponentType);
 		EntitySpanFetchInfo FetchedEntityInfo = WorldEntityManager->GetEntityFetchInfo(typeID);
@@ -225,14 +225,14 @@ private:
 		AlwaysFetchedReadOnlyComponentTypes.insert(id);
 
 		std::function<void()>  fetcher = [=]() {
-			ReadOnlyAlwaysFetcher<ComponentType>(typeID, storage);
+			ReadOnlyEntitiesFetcher<ComponentType>(typeID, storage);
 			};
 
 		FetchFunctions.push_back(fetcher);
 	}
 
 	template <typename ComponentType>
-	void ReadOnlyAlwaysFetcher(EntityType typeID, std::span<ComponentType const>* span)
+	void ReadOnlyEntitiesFetcher(EntityType typeID, std::span<ComponentType const>* span)
 	{
 		std::span<ComponentType const> fetchedSpan = WorldEntityManager->GetEntityReadOnlyComponentSpan<ComponentType>(typeID);
 		*span = fetchedSpan;
@@ -276,6 +276,27 @@ private:
 		*span = WorldComponentManager->GetReadOnlySystemData<ComponentType>();
 	}
 
+	template <typename ComponentType>
+	void AddReadOnlyAlwaysFetchComponents(std::vector < std::span<ComponentType const>>* storage)
+	{
+		auto& id = typeid(ComponentType);
+		AlwaysFetchedComponents.push_back(id);
+		AlwaysFetchedReadOnlyComponentTypes.insert(id);
+
+		std::function<void()>  fetcher = [=]() {
+			ReadOnlyComponentsFetcher<ComponentType>(storage);
+			};
+
+		FetchFunctions.push_back(fetcher);
+	}
+
+	template <typename ComponentType>
+	void ReadOnlyComponentsFetcher(std::vector<std::span<ComponentType const>>* spans)
+	{
+		*spans = WorldComponentManager->GetReadOnlyComponentSpans<ComponentType>();
+	}
+
+
 // Variables:
 protected:
 
@@ -291,6 +312,7 @@ protected:
 
 private:
 	std::vector<EntityFetchInfo> AlwaysFetchedEntityComponents;
+	std::vector<std::type_index> AlwaysFetchedComponents;
 	std::unordered_set<std::type_index> ReadOnlySystemData;
 	std::unordered_set<std::type_index> WriteReadSystemData;
 	std::unordered_set<std::type_index> WantedReadOnlyComponentTypes;
@@ -316,7 +338,7 @@ public:
 
 protected:
 
-	virtual void UpdatePerEntity(float deltaTime, Entity entity, EntityType entityType) = 0;
+	virtual void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) = 0;
 
 
 	template <typename ComponentType>
@@ -346,13 +368,19 @@ protected:
 	template <typename ComponentType>
 	void AddAlwaysFetchedEntitiesForReading(EntityType typeID, ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		AddReadOnlyAlwaysFetch(typeID, &storage->Storage);
+		AddReadOnlyAlwaysFetchEntityType(typeID, &storage->Storage);
 	}
 
 	template <typename ComponentType>
 	void AddAlwaysFetchedEntitiesForWriting(EntityType typeID, WriteReadAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		AddWriteReadAlwaysFetch(typeID, &storage->Storage);
+		AddWriteReadAlwaysFetchEntityType(typeID, &storage->Storage);
+	}
+
+	template <typename ComponentType>
+	void AddAlwaysFetchedComponentsForReading(ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
+	{
+		AddReadOnlyAlwaysFetchComponents(&storage->Storage);
 	}
 
 	template <typename ComponentType>
@@ -382,28 +410,28 @@ protected:
 	template <typename ComponentType>
 	ComponentType GetEntityComponent(Entity entity, ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		size_t index = WorldEntityManager->GetEntityStorageID(entity);
+		size_t index = WorldEntityManager->GetEntityComponentIndex(entity);
 		return storage->Storage[index];
 	}
 
 	template <typename ComponentType>
 	ComponentType GetEntityComponent(Entity entity, EntityType entityType, ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		size_t index = WorldEntityManager->GetEntityStorageID(entity, entityType);
+		size_t index = WorldEntityManager->GetEntityComponentIndex(entity, entityType);
 		return storage->Storage[index];
 	}
 
 	template <typename ComponentType>
 	ComponentType& GetEntityComponent(Entity entity, WriteReadAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		size_t index = WorldEntityManager->GetEntityStorageID(entity);
+		size_t index = WorldEntityManager->GetEntityComponentIndex(entity);
 		return storage->Storage[index];
 	}
 
 	template <typename ComponentType>
 	ComponentType& GetEntityComponent(Entity entity, EntityType entityType, WriteReadAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		size_t index = WorldEntityManager->GetEntityStorageID(entity, entityType);
+		size_t index = WorldEntityManager->GetEntityComponentIndex(entity, entityType);
 		return storage->Storage[index];
 	}
 
@@ -412,7 +440,7 @@ protected:
 	/// to fetch components from entities processed in this loop.
 	/// </summary>
 	/// <param name="function"></param>
-	void ExecutePerEntity(std::function<void(float, Entity, EntityType)> function)
+	void ExecutePerEntity(std::function<void(double, Entity, EntityType)> function)
 	{
 		for (size_t vectorIndex = 0; vectorIndex < FetchedEntitiesInfo.size(); vectorIndex++)
 		{
@@ -423,7 +451,7 @@ protected:
 				RuntimeThreadInfo.outerIndex = vectorIndex;
 				RuntimeThreadInfo.innerIndexRead = spanIndex;
 				RuntimeThreadInfo.innerIndexWrite = spanIndex;
-				std::invoke(function, DeltaTime, locator.ID, info.Type);
+				std::invoke(function, CurrentDeltaTime, locator.Entity, info.Type);
 			}
 		}
 	}
@@ -431,9 +459,9 @@ protected:
 
 private:
 
-	virtual void SystemUpdate(float deltaTime)
+	virtual void SystemUpdate(const double deltaTime)
 	{
-		DeltaTime = deltaTime;
+		CurrentDeltaTime = deltaTime;
 		UpdateMatchingEntityTypes();
 		FetchRequiredSpans();
 		FetchedEntitiesInfo = WorldEntityManager->GetEntityFetchInfo(MatchingEntityTypes);
@@ -449,7 +477,7 @@ private:
 					RuntimeThreadInfo.outerIndex = vectorIndex;
 					RuntimeThreadInfo.innerIndexWrite = spanIndex;
 					RuntimeThreadInfo.innerIndexRead = spanIndex;
-					UpdatePerEntity(deltaTime, locator.ID, info.Type);
+					UpdatePerEntity(deltaTime, locator.Entity, info.Type);
 				}
 			}
 		}
@@ -459,7 +487,7 @@ protected:
 	bool DisableAutomaticEntityLoop = false;
 
 private:
-	float DeltaTime;
+	double CurrentDeltaTime;
 	ThreadInfo RuntimeThreadInfo;
 };
 
@@ -482,11 +510,11 @@ public:
 
 
 	virtual void Init() {}
-	virtual void PreUpdate(float deltaTime) = 0;
-	virtual void Update(float deltaTime) = 0;
-	virtual void PostUpdate(float deltaTime) = 0;
+	virtual void PreUpdate(const double deltaTime) = 0;
+	virtual void Update(const double deltaTime) = 0;
+	virtual void PostUpdate(const double deltaTime) = 0;
 	virtual void Destroy() = 0;
-	virtual void UpdatePerEntityThreaded(int thread, float deltaTime, Entity entity, EntityType entityType) = 0;
+	virtual void UpdatePerEntityThreaded(int thread, const double deltaTime, Entity entity, EntityType entityType) = 0;
 
 	template <typename ComponentType>
 	void AddWantedComponentDataForReading(ReadOnlyComponentStorage<ComponentType>* storage)
@@ -510,7 +538,13 @@ public:
 	template <typename ComponentType>
 	void AddAlwaysFetchedEntitiesForReading(EntityType typeID, ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		AddReadOnlyAlwaysFetch(typeID, &storage->Storage);
+		AddReadOnlyAlwaysFetchEntityType(typeID, &storage->Storage);
+	}
+
+	template <typename ComponentType>
+	void AddAlwaysFetchedComponentsForReading(ReadOnlyComponentStorage<ComponentType>* storage)
+	{
+		AddReadOnlyAlwaysFetchComponents(&storage->Storage);
 	}
 
 	template <typename ComponentType>
@@ -536,14 +570,14 @@ public:
 	template <typename ComponentType>
 	ComponentType GetEntityComponent(Entity entity, ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		size_t index = WorldEntityManager->GetEntityStorageID(entity);
+		size_t index = WorldEntityManager->GetEntityComponentIndex(entity);
 		return storage->Storage[index];
 	}
 
 	template <typename ComponentType>
 	ComponentType GetEntityComponent(Entity entity, EntityType entityType, ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		size_t index = WorldEntityManager->GetEntityStorageID(entity, entityType);
+		size_t index = WorldEntityManager->GetEntityComponentIndex(entity, entityType);
 		return storage->Storage[index];
 	}
 
@@ -553,7 +587,7 @@ protected:
 	/// to fetch components from entities processed in this loop.
 	/// </summary>
 	/// <param name="function"></param>
-	void ExecutePerEntityThreaded(std::function<void(int, float, Entity, EntityType)> function)
+	void ExecutePerEntityThreaded(std::function<void(int, double, Entity, EntityType)> function)
 	{
 		CopyDataForThreads();
 		for (int thread = 0; thread < ThreadCount; thread++)
@@ -570,7 +604,7 @@ protected:
 
 
 private:
-	virtual void SystemUpdate(float deltaTime) override
+	void SystemUpdate(const double deltaTime) override
 	{
 		CurrentDeltaTime = deltaTime;
 		UpdateMatchingEntityTypes();
@@ -597,7 +631,7 @@ private:
 
 	}
 
-	void ThreadTask(int thread, float deltaTime, const std::vector<DataOffsets>& threadOffsets, const std::vector<EntitySpanFetchInfo>& entitiesInfo)
+	void ThreadTask(int thread, const double deltaTime, const std::vector<DataOffsets>& threadOffsets, const std::vector<EntitySpanFetchInfo>& entitiesInfo)
 	{
 		auto& currentThreadInfo = RuntimeThreadInfo[thread];
 		for (size_t i = 0; i < threadOffsets.size(); i++)
@@ -610,12 +644,12 @@ private:
 				currentThreadInfo.outerIndex = offset.outerIndex;
 				currentThreadInfo.innerIndexWrite = innerIndex;
 				currentThreadInfo.innerIndexRead = innerIndex + offset.startOffset;
-				UpdatePerEntityThreaded(thread, deltaTime, locator.ID, entityInfos.Type);
+				UpdatePerEntityThreaded(thread, deltaTime, locator.Entity, entityInfos.Type);
 			}
 		}
 	}
 
-	void ThreadCustomTask(std::function<void(int, float, Entity, EntityType)> function, int thread, float deltaTime, const std::vector<DataOffsets>& threadOffsets, const std::vector<EntitySpanFetchInfo>& entitiesInfo)
+	void ThreadCustomTask(std::function<void(int, double, Entity, EntityType)> function, int thread, const double deltaTime, const std::vector<DataOffsets>& threadOffsets, const std::vector<EntitySpanFetchInfo>& entitiesInfo)
 	{
 		auto& currentThreadInfo = RuntimeThreadInfo[thread];
 		for (size_t i = 0; i < threadOffsets.size(); i++)
@@ -628,7 +662,7 @@ private:
 				currentThreadInfo.outerIndex = offset.outerIndex;
 				currentThreadInfo.innerIndexWrite = innerIndex;
 				currentThreadInfo.innerIndexRead = innerIndex + offset.startOffset;
-				std::invoke(function, thread, deltaTime, locator.ID, entityInfos.Type);
+				std::invoke(function, thread, deltaTime, locator.Entity, entityInfos.Type);
 			}
 		}
 	}
@@ -860,7 +894,7 @@ private:
 	ThreadedTaskRunner* ThreadRunner;
 	int MinEntitiesPerThread = 8;
 	int ThreadCount = 1;
-	float CurrentDeltaTime;
+	double CurrentDeltaTime;
 
 	std::vector<std::vector<DataOffsets>> ThreadDataOffsets;
 	std::vector<std::vector<EntitySpanFetchInfo>> ThreadEntityInfo;

@@ -42,9 +42,9 @@ protected:
 		AddWantedComponentDataForWriting(&CameraComponents);
 
 	}
-	void PreUpdate(float deltaTime) override {}
-	void Update(float deltaTime) override {}
-	void UpdatePerEntity(float deltaTime, Entity entity, EntityType entityType) override
+	void PreUpdate(const double deltaTime) override {}
+	void Update(const double deltaTime) override {}
+	void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) override
 	{
 
 		TransformComponent& transformComponent = GetCurrentEntityComponent(&TransformComponents);
@@ -53,11 +53,11 @@ protected:
 		UpdateCamera(deltaTime, entity, transformComponent, cameraComponent);
 	}
 
-	void PostUpdate(float deltaTime) override {}
+	void PostUpdate(const double deltaTime) override {}
 	void Destroy() override {}
 
 
-	void UpdateCamera(float deltaTime, 
+	void UpdateCamera(const double deltaTime, 
 		Entity entity,
 		TransformComponent& transformComponent, 
 		CameraComponent& cameraComponent)
@@ -127,7 +127,7 @@ protected:
 			if (inputData.Left_Control) { speedMultiplier -= 0.25f; }
 			glm::normalize(direction);
 
-			transformComponent.Position += direction * speed * speedMultiplier * deltaTime;
+			transformComponent.Position += direction * static_cast<float>(speed * speedMultiplier * deltaTime);
 			cameraComponent.View = MatrixCalculations::CalculateLookAtMatrix(transformComponent.Position, transformComponent.Position + cameraComponent.Front, cameraComponent.Up);
 
 			//fmt::println("POS:  {},{},{}", transformComponent.Position.x, transformComponent.Position.y, transformComponent.Position.z);

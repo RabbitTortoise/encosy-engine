@@ -15,9 +15,14 @@ export class IComponentStorage
 
 public:
 	IComponentStorage() {}
-	~IComponentStorage() {}
+	virtual ~IComponentStorage() {}
 
 	virtual size_t GetComponentCount() = 0;
+	virtual bool RemoveComponent(const size_t index) = 0;
+	virtual bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) = 0;
+	virtual std::unique_ptr<IComponentStorage> InitializeSimilarStorage() = 0;
+	virtual void Reset() = 0;
+	virtual void AddComponentToStorage() = 0;
 };
 
 
@@ -26,6 +31,7 @@ export struct ComponentStorageLocator
 public:
 	std::type_index ComponentType = typeid(ComponentStorageLocator);
 	size_t ComponentStorageIndex = -1;
+
 };
 
 
@@ -45,11 +51,56 @@ public:
 		Storage = std::vector<ComponentType>();
 		Storage.reserve(1);
 	}
-	~ComponentTypeStorage(){}
+	~ComponentTypeStorage() override {}
 	
-	size_t GetComponentCount()
+	size_t GetComponentCount() override
 	{
 		return Storage.size();
+	}
+
+	/// <summary>
+	/// Removes component from specific index
+	/// </summary>
+	/// <param name="index"></param>
+	/// <returns></returns>
+	bool RemoveComponent(const size_t index) override
+	{
+		if (index < GetComponentCount())
+		{
+			auto removedIt = Storage.begin() + index;
+			auto lastIT = Storage.end() - 1;
+			*removedIt = std::move(*lastIT);
+			Storage.pop_back();
+			return true;
+		}
+		return false;
+	}
+
+	bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) override
+	{
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(otherStorage);
+		if (id < GetComponentCount())
+		{
+			storage->AddComponentToStorage(Storage[id]);
+			return true;
+		}
+		return false;
+	}
+
+	std::unique_ptr<IComponentStorage> InitializeSimilarStorage() override
+	{
+		auto newStorage = std::make_unique<ComponentTypeStorage<ComponentType>>();
+		return std::move(newStorage);
+	}
+
+	void Reset() override
+	{
+		Storage.clear();
+	}
+
+	void AddComponentToStorage() override
+	{
+		Storage.push_back(ComponentType());
 	}
 
 protected:
@@ -57,16 +108,18 @@ protected:
 	/// Adds a new Component to the vector.
 	/// </summary>
 	/// <returns></returns>
+
+
 	void AddComponentToStorage(const ComponentType component)
 	{
 		Storage.push_back(component);
 	}
 
-	ComponentType* GetComponent(const size_t id)
+	ComponentType* GetWriteReadComponent(const size_t id)
 	{
 		if (id < GetComponentCount())
 		{
-			return &Storage->at(id);
+			return &Storage[id];
 		}
 		return nullptr;
 	}
@@ -75,27 +128,9 @@ protected:
 	{
 		if (id < GetComponentCount())
 		{
-			return Storage->at(id);
+			return Storage[id];
 		}
 		return {};
-	}
-
-	/// <summary>
-	/// Removes component from specific index
-	/// </summary>
-	/// <param name="index"></param>
-	/// <returns></returns>
-	bool RemoveComponent(const size_t index)
-	{
-		if (index < GetComponentCount())
-		{
-			auto removedIt = Storage.begin() + index;
-			auto lastIT = Storage.back();
-			*removedIt = std::move(lastIT);
-			Storage.pop_back();
-			return true;
-		}
-		return false;
 	}
 
 	void SetComponentData(const size_t index, const ComponentType component)
@@ -103,12 +138,7 @@ protected:
 		Storage[index] = component;
 	}
 
-	void Reset()
-	{
-		Storage.clear();
-	}
-
-	const std::span<ComponentType const> GetStorageReadOnlySpan()
+	std::span<ComponentType const> GetStorageReadOnlySpan() const
 	{
 		return std::span<ComponentType const>(Storage);
 	}
@@ -117,7 +147,8 @@ protected:
 	{
 		return std::span<ComponentType>(Storage);
 	}
-	
+
+
 private:
 	std::vector<ComponentType> Storage;
 };
@@ -136,11 +167,19 @@ public:
 		SystemDataComponent.reserve(1);
 		SystemDataComponent.push_back(ComponentType{});
 	}
-	~SystemDataStorage() {}
+	~SystemDataStorage() override {}
 
-	size_t GetComponentCount()
+	size_t GetComponentCount() override
 	{
 		return 1;
+	}
+
+	void AddComponentToStorage() override {}
+
+	std::unique_ptr<IComponentStorage> InitializeSimilarStorage() override
+	{
+		auto newStorage = std::make_unique<SystemDataStorage<ComponentType>>();
+		return std::move(newStorage);
 	}
 
 protected:
@@ -160,6 +199,18 @@ protected:
 		return SystemDataComponent;
 	}
 
+	void Reset() override
+	{
+		SystemDataComponent.clear();
+	}
+
+	bool RemoveComponent(const size_t index) override {return false;}
+	bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) override
+	{
+		auto storage = static_cast<SystemDataStorage<ComponentType>*>(otherStorage);
+		storage->SetComponentData(SystemDataComponent[0]);
+		return true;
+	}
 
 private:
 	std::vector<ComponentType> SystemDataComponent;

@@ -38,15 +38,15 @@ public:
 		CreateEngineEntities(PrimaryWorldEntityManager, PrimaryWorldComponentManager, PrimaryWorldSystemManager, EngineWindowManager, EngineRenderCore);
 	}
 
-	void PrimaryWorldPhysicsUpdate(float deltaTime)
+	void PrimaryWorldPhysicsUpdate(const double deltaTime)
 	{
 		PrimaryWorldSystemManager->UpdatePhysicsSystems(deltaTime);
 	}
-	void PrimaryWorldSystemUpdate(float deltaTime)
+	void PrimaryWorldSystemUpdate(const double deltaTime)
 	{
 		PrimaryWorldSystemManager->UpdateSystems(deltaTime);
 	}
-	void PrimaryWorldRenderUpdate(float deltaTime)
+	void PrimaryWorldRenderUpdate(const double deltaTime)
 	{
 		PrimaryWorldSystemManager->UpdateRenderSystems(deltaTime);
 	}

@@ -58,7 +58,7 @@ void InitializeEngineSystems(EntityManager* EM, ComponentManager* CM, SystemMana
 		.MainCamera = {},
 		.MainWindow = WM->GetMainWindow(),
 		.Yaw = -90,
-		.Pitch = 40,
+		.Pitch = 0,
 	};
 
 	locator = CM->CreateSystemDataStorage(cameraSystemData);

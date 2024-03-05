@@ -2,8 +2,7 @@ module;
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-
-export module EncosyGame.Demo;
+export module EncosyGame.RotationTest;
 
 import EncosyEngine.Interface;
 import EncosyEngine.EncosyCore;
@@ -13,9 +12,14 @@ import Components.TransformComponent;
 import Components.MaterialComponent;
 import Components.ModelMatrixComponent;
 
+import StressTest.Components.MovementComponent;
+import StressTest.Systems.MovementSystem;
+import StressTest.Systems.MovementSystemThreaded;
+
 import RenderCore.MeshLoader;
 import RenderCore.TextureLoader;
 import RenderCore.RenderPipelineManager;
+
 
 import <map>;
 import <vector>;
@@ -45,7 +49,8 @@ float RandSpeed()
 	return (RandomNumber0_1() * 20.0f + 5.0f);
 }
 
-export void InitDemo()
+
+export void InitRotationTest(int testDimensionsX, int testDimensionsY, int testDimensionsZ)
 {
 	auto EngineCore = EncosyEngine::GetEncosyCore();
 	auto PrimaryWorld = EngineCore->GetPrimaryWorld();
@@ -59,6 +64,10 @@ export void InitDemo()
 	auto MainMeshLoader = EngineRenderCore->GetMeshLoader();
 	auto MainRenderPipelineManager = EngineRenderCore->GetRenderPipelineManager();
 
+
+	// Movement System
+	WorldSystemManager->AddSystem<MovementSystemThreaded>("MovementSystem");
+
 	auto grassID = MainTextureLoader->LoadTexture("Grass_Texture.png");
 	auto grassNormalID = MainTextureLoader->LoadTexture("Grass_Normal.png");
 	auto rockID = MainTextureLoader->LoadTexture("Rock_Texture.png");
@@ -70,6 +79,11 @@ export void InitDemo()
 	auto waterID = MainTextureLoader->LoadTexture("Water_Texture.png");
 	auto waterNormalID = MainTextureLoader->LoadTexture("Water_Normal.png");
 
+	std::vector<MeshID> meshIDs;
+	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Cube));
+	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere));
+	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Torus));
+
 	std::vector<TextureID> textureIds;
 	textureIds.push_back(grassID);
 	textureIds.push_back(rockID);
@@ -77,15 +91,61 @@ export void InitDemo()
 	textureIds.push_back(snowID);
 	textureIds.push_back(waterID);
 
-	std::vector<MeshID> meshIDs;
-	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Cube));
-	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere));
-	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Torus));
-
 	ModelMatrixComponent matrix = {};
 	TransformComponent tc = {};
 	MaterialComponentLit mcLit = {};
+	MovementComponent movc = {};
 
-	
+	float dist = 2.0f;
+
+	int xStart = (-testDimensionsX) * dist / 2.0f;
+	int yStart = (-testDimensionsY) * dist / 2.0f;
+	int zStart = -15;
+	int xCur = xStart;
+	int yCur = yStart;
+	int zCur = zStart;
+
+	for (size_t x = 0; x < testDimensionsX; x++)
+	{
+		yCur = yStart;
+		for (size_t y = 0; y < testDimensionsY; y++)
+		{
+			zCur = zStart;
+			for (size_t z = 0; z < testDimensionsY; z++)
+			{
+				glm::vec3 dir = RandDir();
+				float speed = RandSpeed();
+
+				float rand1 = RandomNumber0_1();
+				float rand2 = RandomNumber0_1();
+				int textureSelect = std::round(rand1 * (textureIds.size() - 1));
+				int meshSelect = std::round(rand2 * (meshIDs.size() - 1));
+
+				TextureID usedTextureID = textureIds[textureSelect];
+				MeshID usedMeshId = meshIDs[meshSelect];
+				mcLit = {
+					.Diffuse = usedTextureID,
+					.Normal = usedTextureID + 1,
+					.RenderMesh = usedMeshId,
+					.TextureRepeat = 1.0f
+				};
+				tc = {
+					.Position = glm::vec3(xCur,yCur,zCur),
+					.Scale = glm::vec3(0.75,0.75,0.75),
+					.Orientation = glm::quat(glm::vec3(0,0,0)),
+				};
+				movc = {
+					.Direction = dir,
+					.Speed = speed
+				};
+
+				WorldEntityManager->CreateEntityWithData(tc, mcLit, movc, matrix);
+
+				zCur -= dist;
+			}
+			yCur += dist;
+		}
+		xCur += dist;
+	}
 
 }

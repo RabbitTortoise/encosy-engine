@@ -12,6 +12,7 @@ export import RenderCore.VulkanDescriptors;
 
 
 export import <vector>;
+export import <array>;
 
 
 
@@ -97,5 +98,5 @@ export struct RenderCoreResources
 		.directionalLightStrength = 1.0f,
 		.directionalLightColor = glm::vec3(1.0f, 1.0f, 1.0f),
 	};
-	
+
 };

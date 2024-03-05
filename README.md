@@ -16,7 +16,7 @@ Due to usage of C++20 modules, the project requires new tools to even compile.
 - Desktop Development with C++
 - C++ Modules for v143 build tools
 3. GPU with Resizable BAR enabled
-- Project should still work without one as the allocated buffers are still small. But the rendering engine is built with the assumption that the CPU can address the whole GPU memory via Resizable BAR.
+- Project should still work without the feature as the allocated buffers are small. But the rendering engine is currently built with the assumption that the CPU can address the whole GPU memory via Resizable BAR.
 4. Vulkan SDK 1.3.275 or newer. You have to install vma with the SDK installer!. 
 5. CMake 3.28 or newer.
 
@@ -29,12 +29,13 @@ Due to usage of C++20 modules, the project requires new tools to even compile.
 3. Build the project files using CMake
 4. Select EncosyGame as startup project and build the binaries with Visual Studio
 
-Automatic copying of resources during build does not work properly. If the game does not start copy encosy-engine/Game/Resources folder to encosy-engine/Build/Debug/Game, and encosy-engine/Engine/Resources folder to encosy-engine/Build/Debug/Engine.
-When building in Release mode, do the same but just for the encosy-engine/Build/Release -directory.
-
 
 ### Demo controls
-Currently there is one demo availble inside EncosyGame -project called StressTest. By default it spans 8k entities with randomized material and mesh.  
+Currently there are 3 demo scenes. You can switch between them using the ChoseScene-enum in Game/Core/main.cppm.  
+RotationTest: By default spawns 8 000 entities and rotates them.   
+CollisionDemo: Spawns spheres that follow invisible targets. All spheres have colliders.  
+DynamicDemo: Same as CollisionDemo but if a sphere collides with a sphere with different texture there's a chance both of them are killed.  
+
 WASD: Move around.  
 Q/E: Move up/down.  
 Right mouse button: Look around.  
@@ -88,4 +89,4 @@ Comes with the Vulkan SDK installer
 
 ## Special thanks
 The best tutorial to Vulkan I found: https://vkguide.dev/
-Some helper classes and builders are copied from the guide, but I have adapted them to work better in my engine.
+Some helper classes and builders are copied from the guide, but I have adapted them to work better in my engine. Substantial portions have been marked.

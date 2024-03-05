@@ -25,7 +25,7 @@ namespace
 
 export namespace EncosyEngine
 {
-    void InitializeEngine()
+    void InitializeEngine(std::string title = "EncosyEngine", bool fullscreen = false, int width = 1920, int height = 1080)
     {
         // Enable Finnish letters in the windows console.
         SetConsoleCP(1252);
@@ -39,7 +39,7 @@ export namespace EncosyEngine
 
         std::cout << "Starting EncosyEngine" << std::endl;
         EngineApp = std::make_unique<EncosyApplication>();
-        EngineApp->EngineInit();
+        EngineApp->EngineInit(title, fullscreen, width, height);
     }
 
     void StartEngineLoop()

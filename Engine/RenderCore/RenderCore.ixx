@@ -40,12 +40,13 @@ import <memory>;
 import <optional>;
 import <string>;
 import <span>;
-import <array>;
 import <functional>;
 import <deque>;
 import <filesystem>;
 import <iostream>;
 import <format>;
+import <algorithm>;
+import <numeric>;
 
 
 export class RenderCore
@@ -120,6 +121,7 @@ protected:
 
 	void RenderStart()
 	{
+
 		// Wait until the gpu has finished rendering the last frame. Timeout of 1 second
 		VK_CHECK(vkWaitForFences(Resources.vkDevice, 1, &Resources.GetCurrentFrame().vkRenderFence, true, 1000000000));
 
@@ -291,7 +293,7 @@ protected:
 
 		if (ImGui::Begin("Rendering Settings")) {
 			ImGui::Text(std::format("FPS: {}", ImGui::GetIO().Framerate).c_str());
-			ImGui::Text(std::format("Entities simulated: {}", MainWorld->GetWorldEntityManager()->GetEntitiesCreatedCount()).c_str());
+			ImGui::Text(std::format("Entities simulated: {}", MainWorld->GetWorldEntityManager()->GetCurrentEntityCount()).c_str());
 			
 			ImGui::SliderFloat("Render Scale", &Resources.RenderScale, 0.3f, 1.f);
 			
@@ -724,5 +726,7 @@ private:
 
 	// Sharable resources
 	RenderCoreResources Resources;
+
+
 };
 

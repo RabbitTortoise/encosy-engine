@@ -66,8 +66,8 @@ protected:
 
 	};
 
-	void PreUpdate(float deltaTime) override {};
-	void Update(float deltaTime) override 
+	void PreUpdate(const double deltaTime) override {};
+	void Update(const double deltaTime) override 
 	{
 		CameraControllerSystemData csData = GetSystemData(&CameraSystemDataStorage);
 		CurrentCameraComponent = GetEntityComponent(csData.MainCamera, CameraEntityType, &CameraEntityComponents);
@@ -79,7 +79,7 @@ protected:
 		RenderInstanced();
 	};
 
-	void InstanceBuilder(float deltaTime, Entity entity, EntityType entityType)
+	void InstanceBuilder(const double deltaTime, Entity entity, EntityType entityType)
 	{
 		TransformComponent tc = GetCurrentEntityComponent(&TransformComponents);
 		MaterialComponentLit mc = GetCurrentEntityComponent(&MaterialComponents);
@@ -276,8 +276,8 @@ protected:
 		}
 	}
 
-	void UpdatePerEntity(float deltaTime, Entity entity, EntityType entityType) override {};
-	void PostUpdate(float deltaTime) override {};
+	void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) override {};
+	void PostUpdate(const double deltaTime) override {};
 	void Destroy() override {};
 
 

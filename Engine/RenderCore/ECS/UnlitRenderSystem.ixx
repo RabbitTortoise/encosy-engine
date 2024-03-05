@@ -56,15 +56,15 @@ protected:
 
 	};
 
-	void PreUpdate(float deltaTime) override {};
-	void Update(float deltaTime) override 
+	void PreUpdate(const double deltaTime) override {};
+	void Update(const double deltaTime) override 
 	{
 		CameraControllerSystemData csData = GetSystemData(&CameraSystemDataStorage);
 		CurrentCameraComponent = GetEntityComponent(csData.MainCamera, CameraEntityType, &CameraEntityComponents);
 
 	};
 
-	void UpdatePerEntity(float deltaTime, Entity entity, EntityType entityType) override
+	void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		TransformComponent transformComponent = GetCurrentEntityComponent(&TransformComponents);
 		MaterialComponentUnlit materialComponent = GetCurrentEntityComponent(&MaterialComponents);
@@ -180,7 +180,7 @@ protected:
 
 	}
 
-	void PostUpdate(float deltaTime) override {};
+	void PostUpdate(const double deltaTime) override {};
 	void Destroy() override {};
 
 private:

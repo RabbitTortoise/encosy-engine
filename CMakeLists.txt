@@ -23,13 +23,27 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 # Used sources
 list(APPEND EncosyGame_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Core/main.cppm"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/Demo.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StressTest/StressTest.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StressTest/MovementComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StressTest/MovementSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StressTest/MovementSystemThreaded.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/CollisionDemo.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/DynamicDemo.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/DyingFollowerComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/DyingFollowerSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/FollowerComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/LeaderComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/LeaderMovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SpawningSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SpawningSystemData.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/MovementComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/FollowerMovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SphereColliderComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SphereCollisionSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/CollisionEventComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/FollowerKillingSystem.ixx"
+	
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/RotationTest.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementSystemThreaded.ixx"
 )
-
 # Used shaders, game
 list(APPEND EncosyGame_SHADERS_SRC
 )
@@ -38,7 +52,7 @@ add_executable(EncosyGame)
 target_sources(EncosyGame PUBLIC FILE_SET CXX_MODULES FILES ${EncosyGame_SRC} 
 BASE_DIRS 
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/Core
-	${CMAKE_CURRENT_SOURCE_DIR}/Game/StressTest
+	${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo
 )
 target_link_libraries(EncosyGame PUBLIC EncosyEngine)

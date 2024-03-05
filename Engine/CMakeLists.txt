@@ -142,7 +142,7 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/MeshLoader.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/TextureLoader.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ShaderLoader.ixx"
-
+	
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/MaterialComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/UnlitRenderSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/LitRenderSystem.ixx"
@@ -150,6 +150,7 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystemData.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/StaticComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/ModelMatrixComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/ModelMatrixBuilderSystem.ixx"
 )	
@@ -172,12 +173,15 @@ list(APPEND EncosyTesting_SRC
 # Add EncosyEngine as a static library
 add_library(EncosyEngine STATIC)
 target_sources(EncosyEngine 
-PUBLIC FILE_SET CXX_MODULES FILES ${EncosyEngine_MODULES_SRC} 
+PUBLIC FILE_SET CXX_MODULES 
+FILES 
+${EncosyEngine_MODULES_SRC} 
 BASE_DIRS 
 ${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore 
 ${CMAKE_CURRENT_SOURCE_DIR}/Core 
 ${CMAKE_CURRENT_SOURCE_DIR}/Systems 
-${CMAKE_CURRENT_SOURCE_DIR}/RenderCore)
+${CMAKE_CURRENT_SOURCE_DIR}/RenderCore
+)
 
 target_sources(EncosyEngine PUBLIC FILE_SET HEADERS FILES ${stb_image_SRC} BASE_DIRS ${stb_image_DIR})
 target_include_directories(EncosyEngine PUBLIC  ${stb_image_DIR})

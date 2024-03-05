@@ -18,18 +18,30 @@ export enum class ComponentAccessType { ReadOnly = 0, WriteRead };
 
 export class ComponentManager
 {
+public:
+
 	friend class EntityManager;
 	friend class SystemManager;
-
-public:
 
 	ComponentManager() {}
 	~ComponentManager() {}
 
 	template <typename ComponentType>
-	ComponentStorageLocator AddComponentType()
+	ComponentStorageLocator CreateComponentStorage()
 	{
-		return CreateComponentStorage<ComponentType>();
+		std::type_index componentTypeId = typeid(ComponentType);
+
+		auto storageVectorIt = ComponentStorages.find(componentTypeId);
+		if (storageVectorIt == ComponentStorages.end())
+		{
+			std::vector<std::unique_ptr<IComponentStorage>> storage;
+			ComponentStorages.insert(std::pair(componentTypeId, std::move(storage)));
+			storageVectorIt = ComponentStorages.find(componentTypeId);
+		}
+		auto storage = std::make_unique<ComponentTypeStorage<ComponentType>>();
+		storageVectorIt->second.push_back(std::move(storage));
+
+		return { componentTypeId, storageVectorIt->second.size() - 1 };
 	}
 
 	template<typename ComponentType>
@@ -43,30 +55,29 @@ public:
 		SystemDataStorages.insert(std::make_pair(componentTypeId, std::move(storage)));
 		storagePtr->SetComponentData(component);
 
-		ComponentStorageLocator locator = { componentTypeId, SystemDataStorages.size() - 1 };
-		return locator;
+		return { componentTypeId, SystemDataStorages.size() - 1 };
 	}
 
 	template<typename ComponentType>
 	std::span<ComponentType const> GetReadOnlySystemData()
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
+		const std::type_index componentTypeId = typeid(ComponentType);
 		RecordReadOnlyComponentAccess<ComponentType>();
 
-		auto it = SystemDataStorages.find(componentTypeId);
-		std::unique_ptr<IComponentStorage> const& storage= it->second;
+		const auto it = SystemDataStorages.find(componentTypeId);
+		std::unique_ptr<IComponentStorage> const& storage = it->second;
 		SystemDataStorage<ComponentType>* storagePtr = static_cast<SystemDataStorage<ComponentType>*>(storage.get());
-		
+
 		return storagePtr->GetReadOnly();
 	}
 
 	template<typename ComponentType>
 	std::span<ComponentType> GetWriteReadSystemData()
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
+		const std::type_index componentTypeId = typeid(ComponentType);
 		RecordWriteReadComponentAccess<ComponentType>();
 
-		auto it = SystemDataStorages.find(componentTypeId);
+		const auto it = SystemDataStorages.find(componentTypeId);
 		std::unique_ptr<IComponentStorage> const& storage = it->second;
 		SystemDataStorage<ComponentType>* storagePtr = static_cast<SystemDataStorage<ComponentType>*>(storage.get());
 
@@ -76,7 +87,7 @@ public:
 	template<typename ComponentType>
 	std::vector<std::span<ComponentType const>> GetReadOnlyComponentSpans()
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
+		const std::type_index componentTypeId = typeid(ComponentType);
 		RecordReadOnlyComponentAccess<ComponentType>();
 		std::vector<std::span<ComponentType const>> componentSpans;
 
@@ -92,7 +103,7 @@ public:
 	template<typename ComponentType>
 	std::vector<std::span<ComponentType>> GetWriteReadComponentSpans()
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
+		const std::type_index componentTypeId = typeid(ComponentType);
 		RecordWriteReadComponentAccess<ComponentType>();
 		std::vector<std::span<ComponentType>> componentSpans;
 
@@ -130,7 +141,7 @@ public:
 	template<typename ComponentType>
 	void RecordReadOnlyComponentAccess()
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
+		const std::type_index componentTypeId = typeid(ComponentType);
 		if (ThreadingProtectionCheckOngoing)
 		{
 			ThreadingProtectionReadOnlyComponentsAccessed.insert(componentTypeId);
@@ -140,40 +151,11 @@ public:
 	template<typename ComponentType>
 	void RecordWriteReadComponentAccess()
 	{
-		std::type_index componentTypeId = typeid(ComponentType);
+		const std::type_index componentTypeId = typeid(ComponentType);
 		if (ThreadingProtectionCheckOngoing)
 		{
 			ThreadingProtectionWriteReadComponentsAccessed.insert(componentTypeId);
 		}
-	}
-
-protected:
-	template <typename ComponentType>
-	ComponentStorageLocator CreateComponentStorage()
-	{
-		std::type_index componentTypeId = typeid(ComponentType);
-		
-		auto storageVectorIt = ComponentStorages.find(componentTypeId);
-		if (storageVectorIt == ComponentStorages.end())
-		{
-			std::vector<std::unique_ptr<IComponentStorage>> storage;
-			ComponentStorages.insert(std::pair(componentTypeId, std::move(storage)));
-			storageVectorIt = ComponentStorages.find(componentTypeId);
-		}
-		auto storage = std::make_unique<ComponentTypeStorage<ComponentType>>();
-		storageVectorIt->second.push_back(std::move(storage));
-
-		ComponentStorageLocator locator = { componentTypeId, storageVectorIt->second.size() - 1 };
-		return locator;
-	}
-
-	template<typename ComponentType>
-	void ReplaceComponentData(const ComponentStorageLocator locator, const size_t componentIndex, const ComponentType component)
-	{
-		//Maybe needs a check if index is valid?
-		auto storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex];
-		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
-		storage->SetComponentData(componentIndex, component);
 	}
 
 	template<typename ComponentType>
@@ -184,17 +166,79 @@ protected:
 		storage->AddComponentToStorage(component);
 	}
 
+	void CreateNewComponentToStorage(const ComponentStorageLocator locator) const
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		storageInterface->AddComponentToStorage();
+	}
+
+	void ResetStorage(const ComponentStorageLocator locator) const
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		storageInterface->Reset();
+	}
+
+protected:
+
+
+	template<typename ComponentType>
+	void ReplaceComponentData(const ComponentStorageLocator locator, const size_t componentIndex, const ComponentType component)
+	{
+		//Maybe needs a check if index is valid?
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		storage->SetComponentData(componentIndex, component);
+	}
+
 	template<typename ComponentType>
 	ComponentType GetReadOnlyComponentFromStorage(const ComponentStorageLocator locator, size_t index)
 	{
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
-		return storage->GetReadOnlyComponent(index) ;
+		return storage->GetReadOnlyComponent(index);
+	}
+
+	template<typename ComponentType>
+	ComponentType* GetWriteReadComponentFromStorage(const ComponentStorageLocator locator, size_t index)
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		return storage->GetWriteReadComponent(index);
+	}
+
+	bool RemoveComponent(const ComponentStorageLocator locator, const size_t componentIndex) const
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		return storageInterface->RemoveComponent(componentIndex);
+	}
+
+	ComponentStorageLocator CreateSimilarStorage(const std::type_index componentType)
+	{
+		auto& storagesVector = ComponentStorages.find(componentType)->second;
+		auto newStorage = storagesVector[0]->InitializeSimilarStorage();
+		storagesVector.push_back(std::move(newStorage));
+		return { componentType, storagesVector.size() - 1 };;
+	}
+
+	ComponentStorageLocator CreateSimilarStorage(const ComponentStorageLocator locator)
+	{
+		auto& storagesVector = ComponentStorages.find(locator.ComponentType)->second;
+		auto newStorage = storagesVector[locator.ComponentStorageIndex]->InitializeSimilarStorage();
+		storagesVector.push_back(std::move(newStorage));
+		return { locator.ComponentType, storagesVector.size() - 1 };;
+	}
+
+	bool CopyComponentToOtherStorage(const ComponentStorageLocator origin, const ComponentStorageLocator destination, const size_t componentIndex)
+	{
+		IComponentStorage* originInterface = ComponentStorages.find(origin.ComponentType)->second[origin.ComponentStorageIndex].get();
+		IComponentStorage* destinationInterface = ComponentStorages.find(destination.ComponentType)->second[destination.ComponentStorageIndex].get();
+		return originInterface->CopyComponentToOtherStorage(componentIndex, destinationInterface);
 	}
 
 private:
+
 	std::map<std::type_index, std::vector<std::unique_ptr<IComponentStorage>>> ComponentStorages;
-	std::map <std::type_index, std::unique_ptr<IComponentStorage>> SystemDataStorages;
+	std::map<std::type_index, std::unique_ptr<IComponentStorage>> SystemDataStorages;
 
 
 	//Protection measurements against systems modifying same memory in multiple threads.

@@ -9,6 +9,7 @@ import ECS.Entity;
 import ECS.System;
 import Components.TransformComponent;
 import Components.ModelMatrixComponent;
+import Components.StaticComponent;
 import EncosyEngine.MatrixCalculations;
 
 import <map>;
@@ -27,23 +28,24 @@ public:
 protected:
 	void Init() override
 	{
-		Type = SystemType::ThreadedSystem;
+		Type = SystemType::RenderSystem;
 		SystemQueueIndex = 10000;
 
 		AddWantedComponentDataForReading(&TransformComponents);
 		AddWantedComponentDataForWriting(&ModelMatrixComponents, &ThreadModelMatrixComponents);
+		AddForbiddenComponentType<StaticComponent>();
 
 	}
-	void PreUpdate(float deltaTime) override {}
-	void Update(float deltaTime) override {}
-	void UpdatePerEntityThreaded(int thread, float deltaTime, Entity entity, EntityType entityType) override
+	void PreUpdate(const double deltaTime) override {}
+	void Update(const double deltaTime) override {}
+	void UpdatePerEntityThreaded(int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		const TransformComponent tc = GetCurrentEntityComponent(thread, &TransformComponents);
 		ModelMatrixComponent& mc = GetCurrentEntityComponent(thread, &ThreadModelMatrixComponents);
 		mc.ModelMatrix = MatrixCalculations::CalculateModelMatrix(tc);
 	}
 
-	void PostUpdate(float deltaTime) override {}
+	void PostUpdate(const double deltaTime) override {}
 	void Destroy() override {}
 
 private:

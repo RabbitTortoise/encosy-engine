@@ -20,7 +20,7 @@ import <span>;
 import <map>;
 import <filesystem>;
 
-export enum class EngineMesh { Cube = 0, Quad, Sphere, Torus };
+export enum class EngineMesh { Error = 0, Cube, Quad, Sphere, Torus };
 
 export class MeshLoader
 {
@@ -41,7 +41,11 @@ public:
 	{
 		if (PrimitivesList.size() == 0)
 		{
-			std::vector<size_t> meshIDs = LoadMeshesFromFile("Engine/Resources/Models/cube.obj");
+			std::vector<size_t> meshIDs = LoadMeshesFromFile("Engine/Resources/Models/error.obj");
+			CreateMeshBuffersToGPU(meshIDs);
+			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Error, static_cast<int>(meshIDs[0])));
+
+			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/cube.obj");
 			CreateMeshBuffersToGPU(meshIDs);
 			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Cube, static_cast<int>(meshIDs[0])));
 
@@ -59,12 +63,31 @@ public:
 		}
 	}
 
-	std::vector<MeshID> LoadModelFromFile(std::string modelFileName)
+	MeshID GetMeshID(std::string modelFileName)
 	{
-		std::string modelFilePath = ModelResourceFolder + modelFileName;
-		std::vector<MeshID> meshIDs = LoadMeshesFromFile(modelFilePath);
-		CreateMeshBuffersToGPU(meshIDs);
-		return meshIDs;
+		std::vector<MeshID> meshIDs;
+		auto it = MeshList.find(modelFileName);
+
+		// If requested file has not been loaded, load it and setup meshes for usage.
+		if (it == MeshList.end())
+		{
+			meshIDs = LoadModelFromFile(modelFileName);
+			if (meshIDs.empty())
+			{
+				// ERROR: FILE NOT READABLE
+				return static_cast<MeshID>(EngineMesh::Error);
+			}
+			else
+			{
+				CreateMeshBuffersToGPU(meshIDs);
+				return meshIDs[0];
+			}
+		}
+		// If the requested model has already been loaded, search for the meshes that were loaded before and return them.
+		else
+		{
+			return it->second;
+		}
 	}
 
 	MeshID GetEngineMeshID(EngineMesh shape)
@@ -85,6 +108,13 @@ public:
 
 protected:
 
+	std::vector<MeshID> LoadModelFromFile(std::string modelFileName)
+	{
+		std::string modelFilePath = ModelResourceFolder + modelFileName;
+		std::vector<MeshID>  meshIDs = LoadMeshesFromFile(modelFilePath);
+		return meshIDs;
+	}
+
 	const GPUMeshBuffers* GetPrimitiveBuffer(EngineMesh shape)
 	{
 		auto it = PrimitivesList.find(shape);
@@ -100,45 +130,27 @@ protected:
 	{
 		std::vector<size_t> meshIDs;
 
-		auto it = MeshList.find(modelFilePath);
-		// If requested file has not been loaded, load it and setup meshes for usage.
-		if (it == MeshList.end())
+		std::vector<Mesh*> loadedMeshes = LoadMeshes(modelFilePath);
+
+
+		if (loadedMeshes.size() > 0)
 		{
-			std::vector<Mesh*> loadedMeshes = LoadMeshes(modelFilePath);
-
-
-			if (loadedMeshes.size() > 0)
+			for (size_t i = 0; i < loadedMeshes.size(); i++)
 			{
-				for (size_t i = 0; i < loadedMeshes.size(); i++)
-				{
-					Mesh* m = loadedMeshes[i];
-					MeshDataStorage meshData;
-					meshData.Mesh = std::make_unique<Mesh>();
-					meshData.Mesh.reset(m);
+				Mesh* m = loadedMeshes[i];
+				MeshDataStorage meshData;
+				meshData.Mesh = std::make_unique<Mesh>();
+				meshData.Mesh.reset(m);
 
-					int meshID = static_cast<int>(Meshes.size());
-					meshIDs.push_back(meshID);
-					Meshes.emplace_back(std::move(meshData));
+				int meshID = static_cast<int>(Meshes.size());
+				meshIDs.push_back(meshID);
+				Meshes.emplace_back(std::move(meshData));
 
-					if (i == 0) { MeshList.emplace(std::pair<std::string, int>(modelFilePath, meshID)); }
-					else { MeshList.emplace(std::pair<std::string, int>((modelFilePath + "::" + std::to_string(i)), meshID)); }
-				}
+				if (i == 0) { MeshList.emplace(std::pair<std::string, int>(modelFilePath, meshID)); }
+				else { MeshList.emplace(std::pair<std::string, int>((modelFilePath + "::" + std::to_string(i)), meshID)); }
 			}
 		}
-		// If the requested model has already been loaded, search for the meshes that were loaded before and return them.
-		else
-		{
-			meshIDs.push_back(it->second);
-			int i = 0;
-			while (++it != MeshList.end())
-			{
-				if (it->first == modelFilePath + "::" + std::to_string(++i))
-				{
-					meshIDs.push_back(it->second);
-				}
-				else { break; }
-			}
-		}
+		
 		return meshIDs;
 	}
 

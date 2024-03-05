@@ -80,7 +80,7 @@ protected:
 
 	};
 
-	void PreUpdate(float deltaTime) override 
+	void PreUpdate(const double deltaTime) override 
 	{
 		int threadCount = GetThreadCount();
 		for (auto& instanceVector : InstanceThreadVectors)
@@ -94,8 +94,8 @@ protected:
 			size_t size = builtInstance.ModelMatrices.size();
 			if (builtInstance.ModelMatrices.capacity() - size > 100)
 			{
+				builtInstance.ModelMatrices.shrink_to_fit();
 				builtInstance.ModelMatrices.clear();
-				builtInstance.ModelMatrices.resize(size);
 			}
 			else { builtInstance.ModelMatrices.clear(); }
 
@@ -111,7 +111,7 @@ protected:
 		}
 			
 	};
-	void Update(float deltaTime) override 
+	void Update(const double deltaTime) override 
 	{
 
 		CameraControllerSystemData csData = GetSystemData(&CameraSystemDataStorage);
@@ -135,6 +135,7 @@ protected:
 						builtInstance.ModelMatrices.reserve(builtInstance.ModelMatrices.size() + threadInstance.ModelMatrices.size());
 						std::ranges::copy(threadInstance.ModelMatrices, std::back_inserter(builtInstance.ModelMatrices));
 						found = true;
+						break;
 					}
 				}
 				if (!found)
@@ -157,7 +158,7 @@ protected:
 		RenderInstanced();
 	};
 
-	void InstanceBuilder(int thread, float deltaTime, Entity entity, EntityType entityType)
+	void InstanceBuilder(int thread, const double deltaTime, Entity entity, EntityType entityType)
 	{
 		TransformComponent tc = GetCurrentEntityComponent(thread, &TransformComponents);
 		MaterialComponentLit mc = GetCurrentEntityComponent(thread, &MaterialComponents);
@@ -355,8 +356,8 @@ protected:
 		}
 	}
 
-	void UpdatePerEntityThreaded(int thread, float deltaTime, Entity entity, EntityType entityType) override {};
-	void PostUpdate(float deltaTime) override {};
+	void UpdatePerEntityThreaded(int thread, const double deltaTime, Entity entity, EntityType entityType) override {};
+	void PostUpdate(const double deltaTime) override {};
 	void Destroy() override {};
 
 

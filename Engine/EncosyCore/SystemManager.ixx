@@ -27,15 +27,18 @@ public:
 
 	friend class EncosyCore;
 
-	SystemManager(ComponentManager* componentManager, EntityManager* entityManager) : WorldComponentManager(componentManager), WorldEntityManager(entityManager) {}
+	SystemManager(ComponentManager* componentManager, EntityManager* entityManager)
+	{
+		WorldComponentManager = componentManager;
+		WorldEntityManager = entityManager;
+	}
 	~SystemManager() {}
 
 	template <SystemBaseClass T, typename... Args>
 	T* AddSystem(std::string systemName, Args...args)
 	{
 		//If system already exists, return existing
-		auto it = SystemNames.find(systemName);
-		if (it != SystemNames.end())
+		if (SystemNames.find(systemName) != SystemNames.end())
 		{
 			fmt::println("ERROR: System with the name already exists : {}", systemName);
 			return nullptr;
@@ -65,16 +68,16 @@ public:
 	}
 
 	template <SystemClass T>
-	void InitSystem(T* system, std::string systemName)
+	static void InitSystem(T* system, std::string systemName)
 	{
-		fmt::println("Initializing system ", systemName);
+		fmt::println("Initializing system {}", systemName);
 		system->Init();
 	}
 
 	template <ThreadedSystemClass T>
 	void InitSystem(T* system, std::string systemName)
 	{
-		fmt::println("Initializing threaded system ", systemName);
+		fmt::println("Initializing threaded system {}", systemName);
 		system->ThreadCount = GetThreadCount();
 		system->RuntimeThreadInfo = std::vector<ThreadInfo>(system->ThreadCount, ThreadInfo());
 		system->ThreadRunner = &ThreadRunner;
@@ -97,8 +100,8 @@ public:
 		wantedWriteRead.merge(system->WriteReadSystemData);
 		wantedReadOnly.merge(system->AlwaysFetchedWriteReadComponentTypes);
 
-		bool readOnlyIsEqual = (wantedReadOnly == WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed);
-		bool WriteReadIsEqual = (wantedWriteRead == WorldComponentManager->ThreadingProtectionWriteReadComponentsAccessed);
+		const bool readOnlyIsEqual = (wantedReadOnly == WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed);
+		const bool writeReadIsEqual = (wantedWriteRead == WorldComponentManager->ThreadingProtectionWriteReadComponentsAccessed);
 
 		if (!readOnlyIsEqual)
 		{
@@ -106,7 +109,7 @@ public:
 			fmt::println("{} != {}", GetSetAsString(wantedReadOnly), GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
 
 		}
-		if (!WriteReadIsEqual)
+		if (!writeReadIsEqual)
 		{
 			fmt::println("ERROR when creating {}: WantedWriteReadComponentTypes is different compared to what the system accesses", systemName);
 			fmt::println("{} != {}", GetSetAsString(wantedWriteRead), GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
@@ -114,7 +117,7 @@ public:
 
 		WorldComponentManager->FinishThreadingProtectionCheck();
 
-		if ((readOnlyIsEqual && WriteReadIsEqual) == false)
+		if ((readOnlyIsEqual && writeReadIsEqual) == false)
 		{
 			abort();
 		}
@@ -122,7 +125,7 @@ public:
 		return true;
 	}
 
-	bool DisableSystem(SystemID systemID)
+	bool DisableSystem(SystemID systemID) const
 	{
 		if (systemID < Systems.size())
 		{
@@ -132,7 +135,7 @@ public:
 		return false;
 	}
 
-	bool EnableSystem(SystemID systemID)
+	bool EnableSystem(SystemID systemID) const
 	{
 		if (systemID < Systems.size())
 		{
@@ -142,7 +145,7 @@ public:
 		return false;
 	}
 
-	SystemBase* GetSystemById(SystemID systemId)
+	SystemBase* GetSystemById(const SystemID systemId) const
 	{
 		for (auto const& system : Systems)
 		{
@@ -154,9 +157,9 @@ public:
 		return nullptr;
 	}
 
-	SystemBase* GetSystemByName(std::string systemName)
+	SystemBase* GetSystemByName(const std::string& systemName)
 	{
-		auto it = SystemNames.find(systemName);
+		const auto it = SystemNames.find(systemName);
 		if (it != SystemNames.end())
 		{
 			return GetSystemById(it->second);
@@ -167,11 +170,10 @@ public:
 	template <typename SystemClass>
 	SystemClass* GetSystem()
 	{
-		std::type_index systemTypeIndex = typeid(SystemClass);
-		auto it = SystemIDs.find(systemTypeIndex);
-		if (it != SystemIDs.end())
+		const std::type_index systemTypeIndex = typeid(SystemClass);
+		if (SystemIDs.find(systemTypeIndex) != SystemIDs.end())
 		{
-			return static_cast<SystemClass>(GetSystemById(it->second));
+			return static_cast<SystemClass>(GetSystemById(SystemIDs.find(systemTypeIndex)->second));
 		}
 		return nullptr;
 	}
@@ -182,16 +184,12 @@ public:
 	}
 
 protected:
-	void UpdateSystems(float deltaTime)
+	void UpdateSystems(const double deltaTime) const
 	{
 		// PreUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
 			if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::System)
-			{
-				Systems.at(i)->PreUpdate(deltaTime);
-			}
-			else if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::ThreadedSystem)
 			{
 				Systems.at(i)->PreUpdate(deltaTime);
 			}
@@ -204,10 +202,6 @@ protected:
 			{
 				Systems.at(i)->SystemUpdate(deltaTime);
 			}
-			else if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::ThreadedSystem)
-			{
-				Systems.at(i)->SystemUpdate(deltaTime);
-			}
 		}
 
 		// PostUpdate
@@ -217,14 +211,10 @@ protected:
 			{
 				Systems.at(i)->PostUpdate(deltaTime);
 			}
-			else if (Systems.at(i)->GetEnabled() && Systems.at(i)->GetType() == SystemType::ThreadedSystem)
-			{
-				Systems.at(i)->PostUpdate(deltaTime);
-			}
 		}
 	}
 
-	void UpdateRenderSystems(float deltaTime)
+	void UpdateRenderSystems(const double deltaTime) const
 	{
 		// PreUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
@@ -253,7 +243,7 @@ protected:
 		}
 	}
 
-	void UpdatePhysicsSystems(float deltaTime)
+	void UpdatePhysicsSystems(const double deltaTime) const
 	{
 		// PreUpdate
 		for (size_t i = 0; i < Systems.size(); i++)
@@ -282,7 +272,7 @@ protected:
 		}
 	}
 
-	void DestroySystems()
+	void DestroySystems() const
 	{
 		for (size_t i = 0; i < Systems.size(); i++)
 		{
@@ -292,12 +282,7 @@ protected:
 
 private:
 
-	bool CheckSystemType(System* system, SystemType approved...)
-	{
-
-	}
-
-	std::string GetSetAsString(const std::unordered_set<std::type_index>& set)
+	static std::string GetSetAsString(const std::unordered_set<std::type_index>& set)
 	{
 		std::string s;
 		for (const auto& elem : set)
