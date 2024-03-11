@@ -6,6 +6,9 @@ I'm currently working on implementing more Vulkan graphics features and a graphi
 
 Currently the engine has rendering with simple lighting and it uses instanced rendering. Some of the thesis multithreading functionality is already there too and is used in various places.
 
+YouTube-playlist showcasing the project:  
+https://www.youtube.com/playlist?list=PL7UiajzfESH9aFZna6MW-wU_mE83rhjxj
+
 ## Getting started
 
 ### Requirements
