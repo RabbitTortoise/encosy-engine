@@ -72,7 +72,7 @@ void TestThreadedTaskRunner()
 		float iny = distributionFloat(generator);
 		double inz = distributionDouble(generator);
 
-		ThreadingTest.AddTask([=](int x, float y, double z, double* result) ->void {
+		ThreadingTest.AddWorkTask([=](int x, float y, double z, double* result) ->void {
 			double sleepDur = z + y + x;
 			for (size_t ix = 0; ix < 10000; ++ix)
 			{

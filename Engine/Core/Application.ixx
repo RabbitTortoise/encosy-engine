@@ -1,4 +1,5 @@
 module;
+#include <chrono>
 #include <SDL3/SDL.h>
 #include <fmt/core.h>
 
@@ -8,9 +9,11 @@ import EncosyEngine.WindowManager;
 import EncosyEngine.EncosyCore;
 import EncosyEngine.RenderCore;
 
-import <iostream>;
-import <chrono>;
 import <thread>;
+import <numeric>;
+import <vector>;
+import <ratio>;
+import <string>;
 
 
 export class EncosyApplication
@@ -48,101 +51,115 @@ public:
     }
     void EngineLoop()
     {
-        using clock = std::chrono::steady_clock;
-        auto frameStart = clock::now();
+
+        using namespace std::chrono;
+
+        auto frameStart = steady_clock::now();
         auto frameEnd = frameStart;
 
-        auto fixedPhysicsDeltaTime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / MaxPhysicsFPS));
-        auto accumulatedPhysicsTime = std::chrono::nanoseconds(0);
-        auto simulatedPhysicsTime = std::chrono::nanoseconds(0);
+        double fixedPhysicsDeltaTime = 1.0 / MaxPhysicsFPS;
+        double physicsAccuracyTreshold = fixedPhysicsDeltaTime * 2.0;
+        double accumulatedPhysicsTime = 0.0;
+        double simulatedPhysicsTime = 0.0;
 
-        auto fixedUpdateDeltaTime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / MaxUpdateFPS));
-        auto accumulatedUpdateTime = std::chrono::nanoseconds(0);
-        auto simulatedUpdateTime = std::chrono::nanoseconds(0);
+        double fixedUpdateDeltaTime = 1.0 / MaxUpdateFPS;
+        double updateAccuracyTreshold = fixedUpdateDeltaTime * 2.0;
+        double accumulatedUpdateTime = 0.0;
+        double simulatedUpdateTime = 0.0;
 
-        auto fixedRenderDeltaTime = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / MaxRenderFPS));
-        auto accumulatedRenderTime = std::chrono::nanoseconds(0);
+        double fixedRenderDeltaTime = 1.0 / MaxRenderFPS;
+        auto fixedRenderDeltaTimeNano = nanoseconds(static_cast<int>(floor(fixedRenderDeltaTime * 1000000000)));
+        double accumulatedRenderTime = 0.0;
 
-        LastFrametimes = std::vector<std::chrono::nanoseconds>(LastFramesCount, fixedRenderDeltaTime);
+        LastFrametimes = std::vector<double>(LastFramesCount, fixedRenderDeltaTime);
 
         while (!MainWindow->ShouldQuit())
         {
             // Compute application frame time (delta time) and update application
-            frameEnd = clock::now();
-            const auto frameTime = frameEnd - frameStart;
+            frameEnd = steady_clock::now();
+            const auto clockFrameTime = frameEnd - frameStart;
+            double frameTime = std::chrono::duration<double>(clockFrameTime).count();
             frameStart = frameEnd;
 
-            accumulatedPhysicsTime += std::chrono::nanoseconds(frameTime);
-            accumulatedUpdateTime += std::chrono::nanoseconds(frameTime);
-            accumulatedRenderTime += std::chrono::nanoseconds(frameTime);
+            accumulatedPhysicsTime += frameTime;
+            accumulatedUpdateTime += frameTime;
+            accumulatedRenderTime += frameTime;
 
             // Calculate average of last frames
             LastFrametimes[CurrentFrameTimeIndex] = frameTime;
             CurrentFrameTimeIndex++;
             if (CurrentFrameTimeIndex == LastFramesCount) { CurrentFrameTimeIndex = 0; }
-            auto lastFrameTimes = std::accumulate(LastFrametimes.begin(), LastFrametimes.end(), LastFrametimes[0], [](const auto a, const auto b)
-                {
-                    return a + b;
-                });
-            auto averageFrameTime = lastFrameTimes / LastFramesCount;
-
+            double averageFrameTime = std::accumulate(LastFrametimes.begin(), LastFrametimes.end(), 0.0) / LastFrametimes.size();
 
             // Poll other window events.
             MainWindow->PollEvents();
-
+            // Update System manager state.
+            EngineEncosyCore->PrimaryWorldSystemManagerUpdate();
 
             // Physics System Update
             auto physicsDeltaTime = fixedPhysicsDeltaTime;
-            simulatedPhysicsTime = std::chrono::nanoseconds(0);
-            while (accumulatedPhysicsTime >= physicsDeltaTime)
+            simulatedPhysicsTime = 0;
+            // Run the simulation with less accuracy if the fps is low.
+            if (accumulatedPhysicsTime > physicsAccuracyTreshold)
             {
-                // Run the simulation with less accuracy if the fps is low.
-                while(accumulatedPhysicsTime > physicsDeltaTime * 2.0) { physicsDeltaTime *= 2.0; }
-             
+                physicsDeltaTime = accumulatedPhysicsTime;
+            }
+            if (accumulatedPhysicsTime >= physicsDeltaTime)
+            {
                 accumulatedPhysicsTime -= physicsDeltaTime;
                 simulatedPhysicsTime += physicsDeltaTime;
 
-                const double deltaTime = std::chrono::duration<double>(physicsDeltaTime).count();
-
-                EngineEncosyCore->PrimaryWorldPhysicsUpdate(deltaTime);
+                EngineEncosyCore->PrimaryWorldPhysicsUpdate(physicsDeltaTime);
             }
 
             // System Update
             auto updateDeltaTime = fixedUpdateDeltaTime;
-            simulatedUpdateTime = std::chrono::nanoseconds(0);
-            if (accumulatedUpdateTime > updateDeltaTime)
+            simulatedUpdateTime = 0;
+            // Run the simulation with less accuracy if the fps is low.
+            if (accumulatedUpdateTime > updateAccuracyTreshold)
             {
-                // Unbound render fps if much below set target
-                while (accumulatedUpdateTime > updateDeltaTime * 2.0) { updateDeltaTime *= 2.0; }
-
-                if (accumulatedUpdateTime > updateDeltaTime * 2.0) { updateDeltaTime = accumulatedUpdateTime; }
+                updateDeltaTime = accumulatedUpdateTime;
+            }
+            if (accumulatedUpdateTime >= updateDeltaTime)
+            {
                 accumulatedUpdateTime -= updateDeltaTime;
                 simulatedUpdateTime += physicsDeltaTime;
 
-                const double deltaTime = std::chrono::duration<double>(updateDeltaTime).count();
-
-                EngineEncosyCore->PrimaryWorldSystemUpdate(deltaTime);
+                EngineEncosyCore->PrimaryWorldSystemUpdate(updateDeltaTime);
             }
 
             // Render System Update
             if (EngineRenderCore->CheckIfRenderingConditionsMet())
             {
-                const double deltaTime = std::chrono::duration<double>(frameTime).count();
                 EngineRenderCore->RenderStart();
-                EngineEncosyCore->PrimaryWorldRenderUpdate(deltaTime);
+                EngineEncosyCore->PrimaryWorldRenderUpdate(frameTime);
                 EngineRenderCore->EndRecording();
                 EngineRenderCore->SubmitToQueue();
             }
 
             // Framerate Cap
-            auto desired_end = frameStart + fixedRenderDeltaTime - (averageFrameTime - fixedRenderDeltaTime);
-            std::this_thread::sleep_until(desired_end);
+            double endOffset = fixedRenderDeltaTime - (averageFrameTime - fixedRenderDeltaTime);
+            nanoseconds offsetNanoseconds = nanoseconds(static_cast<int>(floor(endOffset * 1000000000)));
+            auto desired_end = frameStart + offsetNanoseconds;
+            sleep_until_busy(desired_end);
         }
 
         // Clean Engine Resources
         EngineRenderCore->WaitForGpuIdle();
         EngineRenderCore->Cleanup();
         fmt::println("Quitting Engine Loop");
+    }
+
+    template <class Clock, class Duration>
+    void sleep_until_busy(std::chrono::time_point<Clock, Duration> tp)
+    {
+        using namespace std::chrono;
+        auto sleepTp = tp - microseconds(1000);
+        std::this_thread::sleep_until(sleepTp);
+        while (tp >= Clock::now())
+        {
+            ;
+        }
     }
 
     WindowManager* GetWindowManager() { return EngineWindowManager.get(); }
@@ -157,7 +174,7 @@ private:
 
     // Average FPS Calculation
     int LastFramesCount = 3;
-    std::vector<std::chrono::nanoseconds> LastFrametimes;
+    std::vector<double> LastFrametimes;
     int CurrentFrameTimeIndex = 0;
 
     std::unique_ptr<WindowManager> EngineWindowManager;

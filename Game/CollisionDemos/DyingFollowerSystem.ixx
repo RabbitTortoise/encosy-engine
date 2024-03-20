@@ -5,8 +5,8 @@ module;
 
 export module Demo.Systems.DyingFollowerSystem;
 
-import ECS.Entity;
-import ECS.System;
+import EncosyCore.Entity;
+import EncosyCore.SystemThreaded;
 
 import Components.TransformComponent;
 import Demo.Components.DyingFollowerComponent;
@@ -19,7 +19,7 @@ import <iostream>;
 
 
 
-export class DyingFollowerSystem : public ThreadedSystem
+export class DyingFollowerSystem : public SystemThreaded
 {
 
 	friend class SystemManager;
@@ -32,19 +32,14 @@ protected:
 	void Init() override
 	{
 		Type = SystemType::System;
-		SystemQueueIndex = 1100;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
 
-		AddWantedComponentDataForWriting(&TransformComponents, &ThreadTransformComponentComponents);
-		AddWantedComponentDataForWriting(&DyingFollowerComponents, &ThreadDyingFollowerComponents);
-
-		ToBeDeleted = std::vector<std::vector<Entity>>(GetThreadCount());
+		AddComponentQueryForWriting(&TransformComponents, &ThreadTransformComponentComponents);
+		AddComponentQueryForWriting(&DyingFollowerComponents, &ThreadDyingFollowerComponents);
 	}
-	void PreUpdate(const double deltaTime) override {}
-	void Update(const double deltaTime) override 
-	{
-		
-	}
-	void UpdatePerEntityThreaded(int thread, const double deltaTime, Entity entity, EntityType entityType) override
+	void PreUpdate(const int thread, const double deltaTime) override {}
+	void Update(const int thread, const double deltaTime) override {	}
+	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponentComponents);
 		DyingFollowerComponent& dc = GetCurrentEntityComponent(thread, &ThreadDyingFollowerComponents);
@@ -52,7 +47,6 @@ protected:
 		dc.TimeToLive -= deltaTime;
 		if (dc.TimeToLive < 0)
 		{
-			ToBeDeleted[thread].emplace_back(entity);
 			return;
 		}
 
@@ -61,7 +55,6 @@ protected:
 		{
 			change *= (-2.5f);
 		}
-
 
 		dc.PushRange += change;
 		tc.Scale.x = dc.PushRange;
@@ -81,22 +74,10 @@ protected:
 		}
 	}
 
-	void PostUpdate(const double deltaTime) override 
-	{
-		for (auto& deleteVector : ToBeDeleted)
-		{
-			for (const auto& entity : deleteVector)
-			{
-				WorldEntityManager->DeleteEntity(entity);
-			}
-			deleteVector.clear();
-		}
-	}
+	void PostUpdate(const int thread, const double deltaTime) override {}
 	void Destroy() override {}
 
 private:
-
-	std::vector<std::vector<Entity>> ToBeDeleted;
 
 	WriteReadComponentStorage<TransformComponent> TransformComponents;
 	WriteReadComponentStorage<DyingFollowerComponent> DyingFollowerComponents;

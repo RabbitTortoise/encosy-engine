@@ -1,13 +1,14 @@
 # Specify required versions
 cmake_minimum_required(VERSION 3.28)
-set (CMAKE_CXX_STANDARD    20    CACHE    STRING    "C++ Version"    FORCE)
+set (CMAKE_CXX_STANDARD    23    CACHE    STRING    "C++ Version"    FORCE)
 set (CXX_SCAN_FOR_MODULES    ON    CACHE    STRING    "Modules"    FORCE)
 
 # Compile static libraries using multithreading.
 add_compile_options(
-    $<$<CONFIG:>:/MT> #---------|
-    $<$<CONFIG:Debug>:/MTd> #---|-- Statically link the runtime libraries
-    $<$<CONFIG:Release>:/MT> #--|
+    $<$<CONFIG:>:/MT>
+    $<$<CONFIG:Debug>:/MTd>
+    $<$<CONFIG:RelWithDebInfo>:/MTd>
+    $<$<CONFIG:Release>:/MT>
 )
 
 # Set the project (solution name)
@@ -23,26 +24,30 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 # Used sources
 list(APPEND EncosyGame_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Core/main.cppm"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/CollisionDemo.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/DynamicDemo.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/DyingFollowerComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/DyingFollowerSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/FollowerComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/LeaderComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/LeaderMovementSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SpawningSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SpawningSystemData.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/MovementComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/FollowerMovementSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SphereColliderComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/SphereCollisionSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/CollisionEventComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo/FollowerKillingSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/CollisionDemo.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DynamicDemo.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DyingFollowerComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DyingFollowerSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/LeaderComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/LeaderMovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SpawningSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SpawningSystemData.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/MovementComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerMovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SphereColliderComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SphereCollisionSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/CollisionEventComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerModifySystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerKillingSystem.ixx"
 	
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/RotationTest.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementSystemThreaded.ixx"
+
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StaticTest/StaticTest.ixx"
+
 )
 # Used shaders, game
 list(APPEND EncosyGame_SHADERS_SRC
@@ -53,7 +58,8 @@ target_sources(EncosyGame PUBLIC FILE_SET CXX_MODULES FILES ${EncosyGame_SRC}
 BASE_DIRS 
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/Core
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest
-	${CMAKE_CURRENT_SOURCE_DIR}/Game/Demo
+	${CMAKE_CURRENT_SOURCE_DIR}/Game/StaticTest
+	${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos
 )
 target_link_libraries(EncosyGame PUBLIC EncosyEngine)
 

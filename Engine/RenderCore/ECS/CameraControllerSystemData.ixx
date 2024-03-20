@@ -3,7 +3,7 @@ module;
 
 export module SystemData.CameraControllerSystem;
 
-import ECS.Entity;
+import EncosyCore.Entity;
 import EncosyEngine.WindowManager;
 
 import <vector>;

@@ -2,7 +2,7 @@ module;
 
 export module Demo.Components.FollowerComponent;
 
-import ECS.Entity;
+import EncosyCore.Entity;
 
 export struct FollowerComponent
 {

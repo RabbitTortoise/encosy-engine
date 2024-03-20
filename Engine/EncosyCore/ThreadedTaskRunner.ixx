@@ -11,6 +11,51 @@ import <atomic>;
 import <queue>;
 import <functional>;
 import <memory>;
+import <mutex>;
+import <future>;
+import <barrier>;
+
+
+template <typename T>
+class ThreadSafeQueue
+{
+public:
+	void Push(T item)
+	{
+		std::unique_lock lock(Mutex_);
+		Queue_.push(item);
+	}
+
+	void Emplace(T&& item)
+	{
+		std::unique_lock lock(Mutex_);
+		Queue_.emplace(std::move(item));
+	}
+
+	size_t Size() 
+	{
+		std::unique_lock lock(Mutex_);
+		return Queue_.size();
+	}
+
+	bool Pop(T& item)
+	{
+		std::unique_lock lock(Mutex_);
+		if (!Queue_.empty())
+		{
+			item = std::move(Queue_.front());
+			Queue_.pop();
+			return true;
+		}
+
+		return false;
+	}
+
+
+private:
+	std::queue<T> Queue_;
+	std::mutex Mutex_;
+};
 
 class TaskThread
 {
@@ -18,51 +63,85 @@ class TaskThread
 	{
 		int ThreadId;
 		std::stop_token StopToken;
-		std::binary_semaphore* NewTaskReady;
-		std::binary_semaphore* TaskFinished;
+		std::barrier<>* CopyBarrier;
+		std::barrier<>* WorkBarrier;
+		std::barrier<>* SaveBarrier;
+		std::barrier<>* FinishBarrier;
 		std::jthread* Thread;
-		std::function<void()> CurrentTask;
+
+		ThreadSafeQueue<std::move_only_function<void()>>* CopyTaskQueue;
+		ThreadSafeQueue<std::move_only_function<void()>>* WorkTaskQueue;
+		ThreadSafeQueue<std::move_only_function<void()>>* SaveTaskQueue;
 	};
 
 public:
-	TaskThread() {
-		Data = new ThreadData();
-		Data->NewTaskReady = new std::binary_semaphore(0);
-		Data->TaskFinished = new std::binary_semaphore(1);
-	}
+	TaskThread() {}
 	~TaskThread() {}
 
-	void CreateThread(std::stop_token token, int id)
+	void CreateThread(
+		std::stop_token token, 
+		int id,
+		std::barrier<>* copyBarrier,
+		std::barrier<>* workBarrier,
+		std::barrier<>* saveBarrier,
+		std::barrier<>* finishBarrier,
+		ThreadSafeQueue<std::move_only_function<void()>>* copyTaskQueue,
+		ThreadSafeQueue<std::move_only_function<void()>>* workTaskQueue,
+		ThreadSafeQueue<std::move_only_function<void()>>* saveTaskQueue)
 	{
-		//Thread = new std::jthread(RunThread, token, id, NewTaskReady, TaskFinished);
-		//Data->StopToken = std::move(token)
+
+		Data = new ThreadData();
 		Data->StopToken = token;
 		Data->ThreadId = id;
+		Data->CopyBarrier = copyBarrier;
+		Data->WorkBarrier = workBarrier;
+		Data->SaveBarrier = saveBarrier;
+		Data->FinishBarrier = finishBarrier;
+		Data->CopyTaskQueue = copyTaskQueue;
+		Data->WorkTaskQueue = workTaskQueue;
+		Data->SaveTaskQueue = saveTaskQueue;
 		Data->Thread = new std::jthread(std::bind_front(&TaskThread::RunThread, this), Data);
+
 	}
 
 	void RunThread(ThreadData* thread_data)
 	{
 		while (!thread_data->StopToken.stop_requested())
 		{
-			//fmt::println("{}: Waiting for new task", thread_data->ThreadId);
-			thread_data->NewTaskReady->acquire();
-			if (!thread_data->StopToken.stop_requested())
+			//fmt::println("{}: Waiting for new tasks to be ready", thread_data->ThreadId);
+			thread_data->CopyBarrier->arrive_and_wait();
+			if (thread_data->StopToken.stop_requested()) { return;; }
+
+			std::move_only_function<void()> invokeFunction;
+			while (thread_data->CopyTaskQueue->Pop(invokeFunction))
 			{
-				//fmt::println("{}: Task Started", thread_data->ThreadId);
-
-				//std::this_thread::sleep_for(std::chrono::duration<double>(1));
-				std::invoke(thread_data->CurrentTask);
-
-				//fmt::println("{}: Task finished", thread_data->ThreadId);
-				thread_data->TaskFinished->release();
+				std::invoke(invokeFunction);
 			}
+			//fmt::println("{}: Waiting for other tasks to finish copying", thread_data->ThreadId);
+			thread_data->WorkBarrier->arrive_and_wait();
+			if (thread_data->StopToken.stop_requested()) { return; }
+
+			while(thread_data->WorkTaskQueue->Pop(invokeFunction))
+			{
+				std::invoke(invokeFunction);
+			}
+			//fmt::println("{}: Waiting for other tasks to finish work", thread_data->ThreadId);
+			thread_data->SaveBarrier->arrive_and_wait();
+			if (thread_data->StopToken.stop_requested()) { return;; }
+
+			while (thread_data->SaveTaskQueue->Pop(invokeFunction) && !thread_data->StopToken.stop_requested())
+			{
+				std::invoke(invokeFunction);
+			}
+			//fmt::println("{}: Waiting for other tasks to finish saving", thread_data->ThreadId);
+			thread_data->FinishBarrier->arrive_and_wait();
 		}
-		//fmt::println("{}: Stop was requested", thread_data->ThreadId);
+		//fmt::println("{}: Stop was requested, quitting thread", thread_data->ThreadId);
 	}
 
 	ThreadData* Data;
 };
+
 
 
 export class ThreadedTaskRunner
@@ -72,73 +151,63 @@ public:
 	{
 		if (threadCountOverride > 0)
 		{
-			ThreadCount = threadCountOverride;
+			ThreadCount_ = threadCountOverride;
 		}
 		else
 		{
-			ThreadCount = std::jthread::hardware_concurrency();
-			if(ThreadCount < 2)
+			ThreadCount_ = std::jthread::hardware_concurrency();
+			if(ThreadCount_ < 2)
 			{
-				ThreadCount = 2;
+				ThreadCount_ = 2;
 			}
 		}
 
+		CopyBarrier_ = new std::barrier(ThreadCount_ + 1);
+		WorkBarrier_ = new std::barrier(ThreadCount_);
+		SaveBarrier_ = new std::barrier(ThreadCount_);
+		FinishBarrier_ = new std::barrier(ThreadCount_ + 1);
+
 		// CreateThreads
-		for (size_t i = 0; i < ThreadCount; ++i)
+		for (size_t i = 0; i < ThreadCount_; ++i)
 		{
-			Threads.emplace_back(std::move(TaskThread()));
-			Threads[i].CreateThread(StopSource.get_token(), i);
+			Threads_.emplace_back(std::move(TaskThread()));
+			Threads_[i].CreateThread(StopSource_.get_token(), i, CopyBarrier_, WorkBarrier_, SaveBarrier_, FinishBarrier_, &CopyTaskQueue_, &WorkTaskQueue_, &SaveTaskQueue_);
 		}
 	}
 	~ThreadedTaskRunner()
 	{
 
-		StopSource.request_stop();
-		for (size_t i = 0; i < ThreadCount; ++i)
+		StopSource_.request_stop();
+		auto copyToken = CopyBarrier_->arrive();
+		auto workToken = WorkBarrier_->arrive();
+		auto saveToken = SaveBarrier_->arrive();
+		auto finishToken = FinishBarrier_->arrive();
+
+		for (size_t i = 0; i < ThreadCount_; ++i)
 		{
-			Threads[i].Data->NewTaskReady->release();
-			Threads[i].Data->TaskFinished->release();
-			Threads[i].Data->Thread->join();
-			delete Threads[i].Data->Thread;
-			delete Threads[i].Data->NewTaskReady;
-			delete Threads[i].Data->TaskFinished;
-			delete Threads[i].Data;
+			Threads_[i].Data->Thread->join();
+			delete Threads_[i].Data->Thread;
+			delete Threads_[i].Data;
 		}
+		delete CopyBarrier_;
+		delete WorkBarrier_;
+		delete SaveBarrier_;
+		delete FinishBarrier_;
 	}
 
 	void RunAllTasks()
 	{
-		//Run all tasks in the queue
-		while (!TaskQueue.empty())
+		if(WorkTaskQueue_.Size() > 0 || SaveTaskQueue_.Size() > 0)
 		{
-			for (size_t i = 0; i < ThreadCount; ++i)
-			{
-				if (Threads[i].Data->TaskFinished->try_acquire_for(std::chrono::microseconds(0)))
-				{
-					if (TaskQueue.empty())
-					{
-						Threads[i].Data->TaskFinished->release();
-						continue;
-					}
-					auto task = TaskQueue.front();
-					Threads[i].Data->CurrentTask = task;
-					TaskQueue.pop();
-					Threads[i].Data->NewTaskReady->release();
-				}
-			}
-		}
-		//Wait for all tasks to finish
-		for (size_t i = 0; i < ThreadCount; ++i)
-		{
-			Threads[i].Data->TaskFinished->acquire();
-			Threads[i].Data->TaskFinished->release();
+			auto copyToken = CopyBarrier_->arrive();
+			FinishBarrier_->arrive_and_wait();
 		}
 	}
 
 	template <typename Function, typename... Args>
-	void AddTask(Function&& func, Args &&...args)
+	void AddCopyTask(Function&& func, Args &&...args)
 	{
-		TaskQueue.emplace(
+		CopyTaskQueue_.Emplace(
 			[f = std::forward<Function>(func), ... largs = std::forward<Args>(args)]() mutable -> decltype(auto)
 			{
 				std::invoke(f, largs...);
@@ -146,12 +215,42 @@ public:
 		);
 	}
 
-	int GetThreadCount() { return ThreadCount; }
+	template <typename Function, typename... Args>
+	void AddWorkTask(Function&& func, Args &&...args)
+	{
+		WorkTaskQueue_.Emplace(
+			[f = std::forward<Function>(func), ... largs = std::forward<Args>(args)]() mutable -> decltype(auto)
+			{
+				std::invoke(f, largs...);
+			}
+		);
+	}
+
+	template <typename Function, typename... Args>
+	void AddSaveTask(Function&& func, Args &&...args)
+	{
+		SaveTaskQueue_.Emplace(
+			[f = std::forward<Function>(func), ... largs = std::forward<Args>(args)]() mutable -> decltype(auto)
+			{
+				std::invoke(f, largs...);
+			}
+		);
+	}
+
+
+	int GetThreadCount() { return ThreadCount_; }
 
 private:
-	int ThreadCount = 0;
-	std::stop_source StopSource;
-	std::vector<TaskThread> Threads;
-	std::queue<std::function<void()>> TaskQueue;
-
+	int ThreadCount_ = 0;
+	std::stop_source StopSource_;
+	
+	std::vector<TaskThread> Threads_;
+	ThreadSafeQueue<std::move_only_function<void()>> CopyTaskQueue_;
+	ThreadSafeQueue<std::move_only_function<void()>> WorkTaskQueue_;
+	ThreadSafeQueue<std::move_only_function<void()>> SaveTaskQueue_;
+	std::barrier<>* CopyBarrier_;
+	std::barrier<>* WorkBarrier_;
+	std::barrier<>* SaveBarrier_;
+	std::barrier<>* FinishBarrier_;
 };
+

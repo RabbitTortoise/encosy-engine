@@ -5,10 +5,10 @@ module;
 
 export module EncosyEngine.SetupCoreECS;
 
-import ECS.Entity;
-import ECS.EntityManager;
-import ECS.ComponentManager;
-import ECS.SystemManager;
+import EncosyCore.Entity;
+import EncosyCore.EntityManager;
+import EncosyCore.ComponentManager;
+import EncosyCore.SystemManager;
 import EncosyEngine.WindowManager;
 import EncosyEngine.RenderCore;
 import EncosyEngine.MatrixCalculations;
@@ -21,7 +21,6 @@ import Systems.CameraControllerSystem;
 import Systems.InputSystem;
 import Systems.UnlitRenderSystem;
 import Systems.LitRenderSystem;
-import Systems.LitRenderSystemThreaded;
 import Systems.ModelMatrixBuilderSystem;
 
 import SystemData.CameraControllerSystem;
@@ -69,8 +68,7 @@ void InitializeEngineSystems(EntityManager* EM, ComponentManager* CM, SystemMana
 	// Render System
 	SM->AddSystem<UnlitRenderSystem>("UnlitRenderSystem", RC);
 	// Render System
-	SM->AddSystem<LitRenderSystemThreaded>("LitRenderSystem", RC);
-	//SM->AddSystem<LitRenderSystem>("LitRenderSystem", RC);
+	SM->AddSystem<LitRenderSystem>("LitRenderSystem", RC);
 }
 
 export

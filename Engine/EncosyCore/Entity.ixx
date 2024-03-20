@@ -1,5 +1,5 @@
 module;
-export module ECS.Entity;
+export module EncosyCore.Entity;
 
 import <utility>;
 import <string>;

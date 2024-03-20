@@ -17,11 +17,13 @@ import Demo.Components.FollowerComponent;
 import Demo.Components.MovementComponent;
 import Demo.Components.CollisionEventComponent;
 import Demo.Components.SphereColliderComponent;
+import Demo.Components.DyingFollowerComponent;
 import Demo.Systems.SpawningSystem;
 import Demo.Systems.DyingFollowerSystem;
 import Demo.Systems.FollowerMovementSystem;
 import Demo.Systems.LeaderMovementSystem;
 import Demo.Systems.SphereCollisionSystem;
+import Demo.Systems.FollowerModifySystem;
 import Demo.Systems.FollowerKillingSystem;
 import Demo.SystemData.SpawningSystem;
 
@@ -74,6 +76,14 @@ export void InitDynamicDemo(glm::vec3 playRegionMin, glm::vec3 playRegionMax)
 		MovementComponent,
 		SphereColliderComponent>
 		("FollowerEntity");
+	auto dyingFollowerInfo = WorldEntityManager->CreateEntityType<
+		TransformComponent,
+		MaterialComponentLit,
+		ModelMatrixComponent,
+		FollowerComponent,
+		DyingFollowerComponent,
+		SphereColliderComponent>
+		("DyingFollowerEntity");
 
 
 	WorldComponentManager->CreateComponentStorage<CollisionEventComponent>();
@@ -160,7 +170,8 @@ export void InitDynamicDemo(glm::vec3 playRegionMin, glm::vec3 playRegionMax)
 	WorldSystemManager->AddSystem<SpawningSystem>("DemoSpawningSystem", MainTextureLoader, MainMeshLoader);
 	WorldSystemManager->AddSystem<LeaderMovementSystem>("DemoLeaderMovementSystem");
 	WorldSystemManager->AddSystem<SphereCollisionSystem>("DemoSphereCollisionSystem");
-	WorldSystemManager->AddSystem<FollowerKillingSystem>("DemoFollowerKillingSystem", MainMeshLoader);
+	WorldSystemManager->AddSystem<FollowerModifySystem>("DemoFollowerModifySystem", MainMeshLoader);
+	WorldSystemManager->AddSystem<FollowerKillingSystem>("DemoFollowerKillingSystem");
 	WorldSystemManager->AddSystem<FollowerMovementSystem>("DemoFollowerMovementSystem");
 	WorldSystemManager->AddSystem<DyingFollowerSystem>("DemoDyingFollowerSystem");
 }

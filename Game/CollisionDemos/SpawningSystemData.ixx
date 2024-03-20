@@ -3,7 +3,7 @@ module;
 
 export module Demo.SystemData.SpawningSystem;
 
-import ECS.Entity;
+import EncosyCore.Entity;
 import Components.MaterialComponent;
 import <vector>;
 

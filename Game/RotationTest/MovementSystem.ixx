@@ -5,8 +5,8 @@ module;
 
 export module StressTest.Systems.MovementSystem;
 
-import ECS.Entity;
-import ECS.System;
+import EncosyCore.Entity;
+import EncosyCore.System;
 import Components.TransformComponent;
 import Components.StaticComponent;
 import StressTest.Components.MovementComponent;
@@ -38,19 +38,19 @@ protected:
 	void Init() override 
 	{
 		Type = SystemType::PhysicsSystem;
-		SystemQueueIndex = 1100;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
 
-		auto cameraEntityInfo = WorldEntityManager->GetEntityTypeInfo("CameraEntity");
+		auto cameraEntityInfo = GetEntityTypeInfo("CameraEntity");
 		cameraType = cameraEntityInfo.Type;
-		AddWantedComponentDataForWriting(&TransformComponents);
-		AddWantedComponentDataForWriting(&MovementComponents);
+		AddComponentQueryForWriting(&TransformComponents);
+		AddComponentQueryForWriting(&MovementComponents);
 
-		AddAlwaysFetchedEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
+		AddEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
 		AddSystemDataForReading(&InputSystemDataStorage);
 		AddSystemDataForReading(&CameraControllerSystemDataStorage);
 
-		AddForbiddenComponentType<StaticComponent>();
-		AddForbiddenComponentType<CameraComponent>();
+		AddForbiddenComponentQuery<StaticComponent>();
+		AddForbiddenComponentQuery<CameraComponent>();
 	}
 	void PreUpdate(const double deltaTime) override {}
 	void Update(const double deltaTime) override {}

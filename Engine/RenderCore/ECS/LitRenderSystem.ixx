@@ -5,9 +5,11 @@ module;
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+#include <array>
+
 export module Systems.LitRenderSystem;
 
-import ECS.System;
+import EncosyCore.SystemThreaded;
 import Components.TransformComponent;
 import Components.MaterialComponent;
 import Components.CameraComponent;
@@ -24,6 +26,8 @@ import RenderCore.AllocationHandler;
 import <span>;
 import <vector>;
 import <functional>;
+import <algorithm>;
+import <iterator>;
 
 
 struct InstanceProperties
@@ -31,13 +35,28 @@ struct InstanceProperties
 	MaterialComponentLit Material = {};
 	std::vector<glm::mat4> ModelMatrices;
 };
+struct ThreadInstanceCalculationData
+{
+	size_t previousInstanceIndex = -1;
+	std::array<size_t, 7> padding = {0,0,0,0,0,0,0};
+};
 
-export class LitRenderSystem : public System
+
+export class LitRenderSystem : public SystemThreaded
 {
 	friend class SystemManager;
 
+	SystemThreadedOptions ThreadedRunOptions =
+	{
+	.PreferRunAlone = true,
+	.ThreadedUpdateCalls = false,
+	.AllowPotentiallyUnsafeEdits = false,
+	.AllowDestructiveEditsInThreads = true,
+	.IgnoreThreadSaveFunctions = true,
+	};
+
 public:
-	LitRenderSystem(RenderCore* engineRenderCore) : System()
+	LitRenderSystem(RenderCore* engineRenderCore)
 	{ 
 		EngineRenderCore = engineRenderCore;
 		MainMeshLoader = EngineRenderCore->GetMeshLoader();
@@ -52,66 +71,111 @@ protected:
 	void Init() override
 	{
 		Type = SystemType::RenderSystem;
-		SystemQueueIndex = 1000;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
+		RunAfterSpecificSystem = "ModelMatrixBuilderSystem";
+		SetThreadedRunOptions(ThreadedRunOptions);
 
-		auto cameraEntityInfo = WorldEntityManager->GetEntityTypeInfo("CameraEntity");
+		auto cameraEntityInfo = GetEntityTypeInfo("CameraEntity");
 
 		AddSystemDataForReading(&CameraSystemDataStorage);
-		AddWantedComponentDataForReading(&TransformComponents);
-		AddWantedComponentDataForReading(&MaterialComponents);
-		AddWantedComponentDataForReading(&ModelMatrixComponents);
-		AddAlwaysFetchedEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
+		AddComponentQueryForReading(&TransformComponents);
+		AddComponentQueryForReading(&MaterialComponents);
+		AddComponentQueryForReading(&ModelMatrixComponents);
+		AddEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
 		
 		CameraEntityType = cameraEntityInfo.Type;
 
+		BuiltInstances = std::vector<InstanceProperties>();
+		InstanceThreadVectors = std::vector<std::vector<InstanceProperties>>(GetThreadCount(), std::vector<InstanceProperties>());
+		ThreadData = std::vector<ThreadInstanceCalculationData>(GetThreadCount(), ThreadInstanceCalculationData());
+
 	};
 
-	void PreUpdate(const double deltaTime) override {};
-	void Update(const double deltaTime) override 
+	void PreUpdate(const int thread, const double deltaTime) override
 	{
+		int threadCount = GetThreadCount();
+		for (auto& instanceVector : InstanceThreadVectors)
+		{
+			instanceVector.clear();
+		}
+
+		for (size_t i = 0; i < BuiltInstances.size(); i++)
+		{
+			auto& builtInstance = BuiltInstances[i];
+			size_t size = builtInstance.ModelMatrices.size();
+			if (builtInstance.ModelMatrices.capacity() - size > 100)
+			{
+				builtInstance.ModelMatrices.shrink_to_fit();
+				builtInstance.ModelMatrices.clear();
+			}
+			else { builtInstance.ModelMatrices.clear(); }
+
+			for (auto& instanceVector : InstanceThreadVectors)
+			{
+				instanceVector.emplace_back(InstanceProperties(builtInstance.Material, std::vector<glm::mat4>()));
+				instanceVector[i].ModelMatrices.reserve(size / threadCount * 2);
+			}
+		}
+		for (auto& data : ThreadData)
+		{
+			data.previousInstanceIndex = 0;
+		}
+	};
+
+	void Update(const int thread, const double deltaTime) override
+	{
+		if (thread != 0) { return; }
+
 		CameraControllerSystemData csData = GetSystemData(&CameraSystemDataStorage);
 		CurrentCameraComponent = GetEntityComponent(csData.MainCamera, CameraEntityType, &CameraEntityComponents);
 
-		previousInstanceIndex = -1;
-		DifferentInstances = std::vector<InstanceProperties>();
-		ExecutePerEntity(std::bind_front(&LitRenderSystem::InstanceBuilder, this));
+		// Compose instances after all entities have been processed.
+		AddCustomSaveFunction(std::bind_front(&LitRenderSystem::ComposeInstances, this));
 
+	};
+
+	void PostUpdate(const int thread, const double deltaTime) override
+	{
+		if (thread != 0) { return; }
 		RenderInstanced();
 	};
 
-	void InstanceBuilder(const double deltaTime, Entity entity, EntityType entityType)
+	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
-		TransformComponent tc = GetCurrentEntityComponent(&TransformComponents);
-		MaterialComponentLit mc = GetCurrentEntityComponent(&MaterialComponents);
-		ModelMatrixComponent matrix = GetCurrentEntityComponent(&ModelMatrixComponents);
-		
+		TransformComponent tc = GetCurrentEntityComponent(thread, &TransformComponents);
+		MaterialComponentLit mc = GetCurrentEntityComponent(thread, &MaterialComponents);
+		ModelMatrixComponent matrix = GetCurrentEntityComponent(thread, &ModelMatrixComponents);
+		size_t& previousInstanceIndex = ThreadData[thread].previousInstanceIndex;
+		std::vector<InstanceProperties>& threadInstance = InstanceThreadVectors[thread];
+
+
 		glm::mat4 modelMatrix = matrix.ModelMatrix;
 
 
-		if (previousInstanceIndex == -1)
+		if (threadInstance.size() == 0)
 		{
 			InstanceProperties newInstances;
 			newInstances.Material = mc;
 			newInstances.ModelMatrices = std::vector<glm::mat4>();
-			DifferentInstances.push_back(newInstances);
-			DifferentInstances[0].ModelMatrices.push_back(modelMatrix);
+			threadInstance.emplace_back(newInstances);
+			threadInstance[0].ModelMatrices.emplace_back(modelMatrix);
 			previousInstanceIndex = 0;
 			return;
 		}
 
-		InstanceProperties previousInstance = DifferentInstances[previousInstanceIndex];
+		InstanceProperties& previousInstance = threadInstance[previousInstanceIndex];
 
 		if (AreMaterialComponentsEqual(previousInstance.Material, mc))
 		{
-			DifferentInstances[previousInstanceIndex].ModelMatrices.push_back(modelMatrix);
+			threadInstance[previousInstanceIndex].ModelMatrices.emplace_back(modelMatrix);
 			return;
 		}
 
 		size_t correctInstance = -1;
-		for (size_t index = 0; index < DifferentInstances.size(); index++)
+		for (size_t index = 0; index < threadInstance.size(); index++)
 		{
 			if (index == previousInstanceIndex) { continue; }
-			if (AreMaterialComponentsEqual(DifferentInstances[index].Material, mc))
+			if (AreMaterialComponentsEqual(threadInstance[index].Material, mc))
 			{
 				correctInstance = index;
 				break;
@@ -119,22 +183,55 @@ protected:
 		}
 		if (correctInstance == -1)
 		{
-			InstanceProperties newInstances = InstanceProperties();
-			newInstances.Material = mc;
-			newInstances.ModelMatrices = std::vector<glm::mat4>();
-			DifferentInstances.push_back(newInstances);
+			threadInstance.emplace_back(InstanceProperties(mc, {}));
 			previousInstanceIndex += 1;
-			DifferentInstances[previousInstanceIndex].ModelMatrices.push_back(modelMatrix);
+			threadInstance[previousInstanceIndex].ModelMatrices.emplace_back(modelMatrix);
+			previousInstanceIndex = previousInstanceIndex;
 			return;
 		}
-		else
+
+		threadInstance[correctInstance].ModelMatrices.emplace_back(modelMatrix);
+		previousInstanceIndex = correctInstance;
+		
+	}
+
+	void ComposeInstances()
+	{
+		// Manually save results from threaded calculations
+		for (size_t i = 0; i < InstanceThreadVectors.size(); i++)
 		{
-			DifferentInstances[correctInstance].ModelMatrices.push_back(modelMatrix);
-			previousInstanceIndex = correctInstance;
+			auto& instanceVector = InstanceThreadVectors[i];
+			for (const auto& threadInstance : instanceVector)
+			{
+				bool found = false;
+				for (auto& builtInstance : BuiltInstances)
+				{
+					if (AreMaterialComponentsEqual(threadInstance.Material, builtInstance.Material))
+					{
+						builtInstance.ModelMatrices.reserve(builtInstance.ModelMatrices.size() + threadInstance.ModelMatrices.size());
+						std::ranges::copy(threadInstance.ModelMatrices, std::back_inserter(builtInstance.ModelMatrices));
+						found = true;
+						break;
+					}
+				}
+				if (!found)
+				{
+					BuiltInstances.push_back(threadInstance);
+				}
+			}
+		}
+		for (size_t i = BuiltInstances.size(); i > 0;)
+		{
+			i--;
+			auto& instance = BuiltInstances[i];
+			if (instance.ModelMatrices.empty())
+			{
+				BuiltInstances.erase(BuiltInstances.begin() + i);
+			}
 		}
 	}
 
-	void RenderInstanced()
+	void RenderInstanced() const
 	{
 		// Update Camera locations
 		auto projection = CurrentCameraComponent.Projection;
@@ -160,7 +257,7 @@ protected:
 
 		RenderPipeline UsedPipeline = MainRenderPipelineManager->GetEngineRenderPipeline(EngineRenderPipelines::Lit);
 
-		for (const auto& instance : DifferentInstances)
+		for (const auto& instance : BuiltInstances)
 		{
 			MaterialComponentLit materialComponent = instance.Material;
 
@@ -276,8 +373,7 @@ protected:
 		}
 	}
 
-	void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) override {};
-	void PostUpdate(const double deltaTime) override {};
+	
 	void Destroy() override {};
 
 
@@ -311,6 +407,7 @@ private:
 	ReadOnlySystemDataStorage<CameraControllerSystemData> CameraSystemDataStorage;
 	
 	// Instance calculation
-	size_t previousInstanceIndex = -1;
-	std::vector<InstanceProperties> DifferentInstances;
+	std::vector<ThreadInstanceCalculationData> ThreadData;
+	std::vector<std::vector<InstanceProperties>> InstanceThreadVectors;
+	std::vector<InstanceProperties> BuiltInstances;
 };

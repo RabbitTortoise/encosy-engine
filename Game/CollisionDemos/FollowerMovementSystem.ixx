@@ -5,8 +5,8 @@ module;
 
 export module Demo.Systems.FollowerMovementSystem;
 
-import ECS.Entity;
-import ECS.System;
+import EncosyCore.Entity;
+import EncosyCore.SystemThreaded;
 import Components.TransformComponent;
 import Demo.Components.MovementComponent;
 import Demo.Components.FollowerComponent;
@@ -20,7 +20,7 @@ import <algorithm>;
 import <numeric>;
 
 
-export class FollowerMovementSystem : public ThreadedSystem
+export class FollowerMovementSystem : public SystemThreaded
 {
 	friend class SystemManager;
 
@@ -28,25 +28,35 @@ public:
 	FollowerMovementSystem() {}
 	~FollowerMovementSystem() {}
 
+	SystemThreadedOptions ThreadedRunOptions =
+	{
+	.PreferRunAlone = false,
+	.ThreadedUpdateCalls = false,
+	.AllowPotentiallyUnsafeEdits = false,
+	.AllowDestructiveEditsInThreads = false,
+	.IgnoreThreadSaveFunctions = false,
+	};
+
 protected:
 	void Init() override
 	{
 		Type = SystemType::PhysicsSystem;
-		SystemQueueIndex = 1100;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
+		RunBeforeSpecificSystem = "DemoSphereCollisionSystem";
+		SetThreadedRunOptions(ThreadedRunOptions);
 
-		LeaderType = WorldEntityManager->GetEntityTypeInfo("LeaderEntity").Type;
+		LeaderType = GetEntityTypeInfo("LeaderEntity").Type;
 
-		AddWantedComponentDataForWriting(&TransformComponents, &ThreadTransformComponents);
-		AddWantedComponentDataForWriting(&MovementComponents, &ThreadMovementComponents);
-		AddWantedComponentDataForReading(&FollowerComponents);
+		AddComponentQueryForWriting(&TransformComponents, &ThreadTransformComponents);
+		AddComponentQueryForWriting(&MovementComponents, &ThreadMovementComponents);
+		AddComponentQueryForReading(&FollowerComponents);
 
-		AddAlwaysFetchedEntitiesForReading(LeaderType, &LeaderComponents);
-		AddAlwaysFetchedEntitiesForReading(LeaderType, &LeaderTransformComponents);
-		
-
+		AddEntitiesForReading(LeaderType, &LeaderComponents);
+		AddEntitiesForReading(LeaderType, &LeaderTransformComponents);
 	}
-	void PreUpdate(const double deltaTime) override {}
-	void Update(const double deltaTime) override 
+
+	void PreUpdate(const int thread, const double deltaTime) override {}
+	void Update(const int thread, const double deltaTime) override
 	{
 		LeadersPerID.clear();
 		for (size_t i = 0; i < LeaderComponents.Storage.size(); i++)
@@ -61,7 +71,7 @@ protected:
 		}
 	}
 
-	void UpdatePerEntityThreaded(int thread, const double deltaTime, Entity entity, EntityType entityType) override
+	void UpdatePerEntity(int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		MovementComponent& mc = GetCurrentEntityComponent(thread, &ThreadMovementComponents);
@@ -88,7 +98,7 @@ protected:
 		mc.Direction = glm::normalize(mc.Direction);
 		tc.Position += mc.Direction * static_cast<float>(mc.Speed * deltaTime);
 	}
-	void PostUpdate(const double deltaTime) override {}
+	void PostUpdate(const int thread, const double deltaTime) override {}
 	void Destroy() override {}
 
 private:

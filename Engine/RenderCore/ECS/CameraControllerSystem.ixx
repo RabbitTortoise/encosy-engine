@@ -6,8 +6,8 @@ module;
 
 export module Systems.CameraControllerSystem;
 
-import ECS.Entity;
-import ECS.System;
+import EncosyCore.Entity;
+import EncosyCore.System;
 import Components.TransformComponent;
 import Components.CameraComponent;
 import SystemData.CameraControllerSystem;
@@ -33,13 +33,13 @@ protected:
 	void Init() override 
 	{
 		Type = SystemType::System;
-		SystemQueueIndex = 1000;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
 
 		AddSystemDataForReading(&InputSystemDataStorage);
 		AddSystemDataForWriting(&CameraSystemDataComponent);
 
-		AddWantedComponentDataForWriting(&TransformComponents);
-		AddWantedComponentDataForWriting(&CameraComponents);
+		AddComponentQueryForWriting(&TransformComponents);
+		AddComponentQueryForWriting(&CameraComponents);
 
 	}
 	void PreUpdate(const double deltaTime) override {}
@@ -71,8 +71,20 @@ protected:
 		if (inputData.MouseRightDown)
 		{
 			controllerData.MainWindow->SetRelativeMouseMode(true);
-			controllerData.Yaw += (float)inputData.MouseRelativeMotion.x * 60.0f * deltaTime;
-			controllerData.Pitch -= (float)inputData.MouseRelativeMotion.y * 60.0f * deltaTime;
+
+			float rotateSpeed = 60.0f;
+			float maxAngleChange = 5.0f;
+
+			float totalX = (float)inputData.MouseRelativeMotion.x * rotateSpeed * deltaTime;
+			float totalY = (float)inputData.MouseRelativeMotion.y * rotateSpeed * deltaTime;
+			if (totalX > maxAngleChange) { totalX = maxAngleChange; }
+			if (totalX < -maxAngleChange) { totalX = -maxAngleChange; }
+			if (totalY > maxAngleChange) { totalY = maxAngleChange; }
+			if (totalY < -maxAngleChange) { totalY = -maxAngleChange; }
+
+
+			controllerData.Yaw += totalX;
+			controllerData.Pitch -= totalY;
 
 			if (controllerData.Pitch > 89.0f)
 				controllerData.Pitch = 89.0f;

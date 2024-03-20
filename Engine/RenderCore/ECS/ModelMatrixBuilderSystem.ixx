@@ -5,8 +5,8 @@ module;
 
 export module Systems.ModelMatrixBuilderSystem;
 
-import ECS.Entity;
-import ECS.System;
+import EncosyCore.Entity;
+import EncosyCore.SystemThreaded;
 import Components.TransformComponent;
 import Components.ModelMatrixComponent;
 import Components.StaticComponent;
@@ -17,7 +17,7 @@ import <span>;
 import <vector>;
 import <iostream>;
 
-export class ModelMatrixBuilderSystem : public ThreadedSystem
+export class ModelMatrixBuilderSystem : public SystemThreaded
 {
 	friend class SystemManager;
 
@@ -29,23 +29,23 @@ protected:
 	void Init() override
 	{
 		Type = SystemType::RenderSystem;
-		SystemQueueIndex = 10000;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
 
-		AddWantedComponentDataForReading(&TransformComponents);
-		AddWantedComponentDataForWriting(&ModelMatrixComponents, &ThreadModelMatrixComponents);
-		AddForbiddenComponentType<StaticComponent>();
+		AddComponentQueryForReading(&TransformComponents);
+		AddComponentQueryForWriting(&ModelMatrixComponents, &ThreadModelMatrixComponents);
+		AddForbiddenComponentQuery<StaticComponent>();
 
 	}
-	void PreUpdate(const double deltaTime) override {}
-	void Update(const double deltaTime) override {}
-	void UpdatePerEntityThreaded(int thread, const double deltaTime, Entity entity, EntityType entityType) override
+	void PreUpdate(const int thread, const double deltaTime) override {}
+	void Update(const int thread, const double deltaTime) override {}
+	void UpdatePerEntity(int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		const TransformComponent tc = GetCurrentEntityComponent(thread, &TransformComponents);
 		ModelMatrixComponent& mc = GetCurrentEntityComponent(thread, &ThreadModelMatrixComponents);
 		mc.ModelMatrix = MatrixCalculations::CalculateModelMatrix(tc);
 	}
 
-	void PostUpdate(const double deltaTime) override {}
+	void PostUpdate(const int thread, const double deltaTime) override {}
 	void Destroy() override {}
 
 private:

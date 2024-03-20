@@ -2,17 +2,18 @@ module;
 export module EncosyCore.EncosyWorld;
 
 //Core Managers
-export import ECS.EntityManager;
-export import ECS.ComponentManager;
-export import ECS.SystemManager;
+export import EncosyCore.EntityManager;
+export import EncosyCore.ComponentManager;
+export import EncosyCore.SystemManager;
+export import EncosyCore.SharedBetweenManagers;
 
 //Core Types
-export import ECS.Entity;
-export import ECS.System;
+export import EncosyCore.Entity;
+export import EncosyCore.System;
 
 //Core Data Storage
-export import ECS.ComponentTypeStorage;
-export import ECS.EntityTypeStorage;
+export import EncosyCore.ComponentTypeStorage;
+export import EncosyCore.EntityTypeStorage;
 
 import <memory>;
 import <vector>;
@@ -22,9 +23,10 @@ export class EncosyWorld
 public:
 	EncosyWorld()
 	{
-		WorldComponentManager = std::make_unique<ComponentManager>();
-		WorldEntityManager = std::make_unique<EntityManager>(WorldComponentManager.get());
-		WorldSystemManager = std::make_unique<SystemManager>(WorldComponentManager.get(), WorldEntityManager.get());
+		WorldSharedBetweenManagers = std::make_unique<SharedBetweenManagers>();
+		WorldComponentManager = std::make_unique<ComponentManager>(WorldSharedBetweenManagers.get());
+		WorldEntityManager = std::make_unique<EntityManager>(WorldSharedBetweenManagers.get(), WorldComponentManager.get());
+		WorldSystemManager = std::make_unique<SystemManager>(WorldSharedBetweenManagers.get(), WorldComponentManager.get(), WorldEntityManager.get());
 	}
 	~EncosyWorld()
 	{
@@ -38,6 +40,7 @@ public:
 	SystemManager* GetWorldSystemManager() { return WorldSystemManager.get(); }
 
 private:
+	std::unique_ptr<SharedBetweenManagers> WorldSharedBetweenManagers;
 	std::unique_ptr<ComponentManager> WorldComponentManager;
 	std::unique_ptr<EntityManager> WorldEntityManager;
 	std::unique_ptr<SystemManager> WorldSystemManager;

@@ -1,13 +1,14 @@
-# Specify minimum supported cmake version and set c++20
+# Specify minimum supported cmake version and set c++23
 cmake_minimum_required(VERSION 3.28)
-set (CMAKE_CXX_STANDARD    20    CACHE    STRING    "C++ Version"    FORCE)
+set (CMAKE_CXX_STANDARD    23    CACHE    STRING    "C++ Version"    FORCE)
 set (CXX_SCAN_FOR_MODULES    ON    CACHE    STRING    "Modules"    FORCE)
 
 # Compile static libraries using multithreading.
 add_compile_options(
-    $<$<CONFIG:>:/MT> #---------|
-    $<$<CONFIG:Debug>:/MTd> #---|-- Statically link the runtime libraries
-    $<$<CONFIG:Release>:/MT> #--|
+    $<$<CONFIG:>:/MT>
+    $<$<CONFIG:Debug>:/MTd>
+    $<$<CONFIG:RelWithDebInfo>:/MTd>
+    $<$<CONFIG:Release>:/MT>
 )
 
 # Set the project (solution name)
@@ -125,9 +126,12 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SystemManager.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/ThreadedTaskRunner.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/Entity.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SystemBase.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/System.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SystemThreaded.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/EntityTypeStorage.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/ComponentTypeStorage.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SharedBetweenManagers.ixx"
 
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCore.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCoreResources.ixx"
@@ -146,7 +150,6 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/MaterialComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/UnlitRenderSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/LitRenderSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/LitRenderSystemThreaded.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystemData.ixx"

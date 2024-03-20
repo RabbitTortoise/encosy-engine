@@ -2,7 +2,7 @@ module;
 
 export module Demo.Components.CollisionEventComponent;
 
-import ECS.Entity;
+import EncosyCore.Entity;
 
 
 export struct CollisionEventComponent

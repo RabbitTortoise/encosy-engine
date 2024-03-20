@@ -7,7 +7,7 @@ module;
 
 export module Systems.UnlitRenderSystem;
 
-import ECS.System;
+import EncosyCore.System;
 import Components.TransformComponent;
 import Components.MaterialComponent;
 import Components.CameraComponent;
@@ -28,7 +28,7 @@ export class UnlitRenderSystem : public System
 	friend class SystemManager;
 
 public:
-	UnlitRenderSystem(RenderCore* engineRenderCore) : System()
+	UnlitRenderSystem(RenderCore* engineRenderCore)
 	{ 
 		EngineRenderCore = engineRenderCore;
 		MainMeshLoader = EngineRenderCore->GetMeshLoader();
@@ -43,14 +43,15 @@ protected:
 	void Init() override
 	{
 		Type = SystemType::RenderSystem;
-		SystemQueueIndex = 1000;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
+		RunAfterSpecificSystem = "ModelMatrixBuilderSystem";
 
-		auto cameraEntityInfo = WorldEntityManager->GetEntityTypeInfo("CameraEntity");
+		auto cameraEntityInfo = GetEntityTypeInfo("CameraEntity");
 
 		AddSystemDataForReading(&CameraSystemDataStorage);
-		AddWantedComponentDataForReading(&TransformComponents);
-		AddWantedComponentDataForReading(&MaterialComponents);
-		AddAlwaysFetchedEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
+		AddComponentQueryForReading(&TransformComponents);
+		AddComponentQueryForReading(&MaterialComponents);
+		AddEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
 
 		CameraEntityType = cameraEntityInfo.Type;
 

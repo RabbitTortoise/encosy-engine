@@ -5,14 +5,15 @@ module;
 export module EncosyGame;
 
 import EncosyGame.RotationTest;
+import EncosyGame.StaticTest;
 import EncosyGame.CollisionDemo;
 import EncosyGame.DynamicDemo;
 import EncosyEngine.Interface;
 
 
-enum class Scene { RotationTest = 0, CollisionDemo, DynamicDemo};
+enum class Scene { RotationTest = 0, StaticTest, CollisionDemo, DynamicDemo};
 
-Scene ChosenScene = Scene::DynamicDemo;
+Scene ChosenScene = Scene::RotationTest;
 bool Fullscreen = false;
 
 export
@@ -37,15 +38,23 @@ int main()
 
 		InitRotationTest(testDimensionsX, testDimensionsY, testDimensionsZ);
 	}
+	if (ChosenScene == Scene::StaticTest)
+	{
+		int testDimensionsX = 20;
+		int testDimensionsY = 20;
+		int testDimensionsZ = 20;
+
+		InitStaticTest(testDimensionsX, testDimensionsY, testDimensionsZ);
+	}
 	if (ChosenScene == Scene::CollisionDemo)
 	{
-		glm::vec3 playRegionMin = { -100, -70, -90 };
+		glm::vec3 playRegionMin = { -100, -70, -80 };
 		glm::vec3 playnRegionMax = { 100, 70, -50 };
 		InitCollisionDemo(playRegionMin, playnRegionMax);
 	}
 	if (ChosenScene == Scene::DynamicDemo)
 	{
-		glm::vec3 playRegionMin = { -100, -70, -90 };
+		glm::vec3 playRegionMin = { -100, -70, -70 };
 		glm::vec3 playnRegionMax = { 100, 70, -50 };
 		InitDynamicDemo(playRegionMin, playnRegionMax);
 	}

@@ -3,14 +3,15 @@ module;
 #include <fmt/format.h>
 #include <algorithm>
 
-export module ECS.EntityTypeStorage;
+export module EncosyCore.EntityTypeStorage;
 
-import ECS.ComponentTypeStorage;
-import ECS.Entity;
+import EncosyCore.ComponentTypeStorage;
+import EncosyCore.Entity;
 
 import <vector>;
 import <string>;
 import <map>;
+import <span>;
 import <typeindex>;
 import <typeinfo>;
 import <memory>;
@@ -19,7 +20,7 @@ import <memory>;
 export typedef size_t EntityComponentIndex;
 
 export struct EntityStorageLocator
-{
+{                                 
 	Entity Entity;
 	EntityComponentIndex ComponentIndex;
 };
@@ -37,12 +38,13 @@ public:
 	EntityType GetStorageEntityType() const { return StorageEntityType; }
 	const std::vector<std::type_index>& GetEntityComponentTypes() { return EntityComponentTypes; }
 
-	void AddComponentType(const ComponentStorageLocator locator)
+	void AddComponentType(const ComponentStorageLocator locator, IComponentStorage* storagePointer)
 	{
 		ComponentStorageLocators.push_back({ locator });
 		EntityComponentTypes.push_back(locator.ComponentType);
 		std::ranges::sort(ComponentStorageLocators, {}, &ComponentStorageLocator::ComponentType);
 		std::ranges::sort(EntityComponentTypes, {});
+		ComponentStoragePointers.insert(std::make_pair(locator.ComponentType, storagePointer));
 	}
 
 	void AddEntityToStorage(const Entity entity)
@@ -61,7 +63,7 @@ public:
 		return (-1);
 	}
 
-	Entity GetEntityIdFromComponentIndex(EntityComponentIndex componentIndex)
+	Entity GetEntityFromComponentIndex(EntityComponentIndex componentIndex)
 	{
 		if (std::ranges::find(EntityStorageLocations, componentIndex, &EntityStorageLocator::ComponentIndex) != EntityStorageLocations.end())
 		{
@@ -78,6 +80,19 @@ public:
 		return ComponentStorageLocators[GetComponentTypeVectorIndex(componentTypeId)];
 	}
 
+	template<typename ComponentType>
+	IComponentStorage* GetComponentStoragePointer() const
+	{
+		const std::type_index componentTypeId = typeid(ComponentType);
+		return ComponentStoragePointers.find(componentTypeId)->second;
+	}
+
+	IComponentStorage* GetComponentStoragePointer(std::type_index componentTypeId) const 
+	{
+		return ComponentStoragePointers.find(componentTypeId)->second;
+	}
+
+
 	EntityStorageLocator GetEntityStorageLocator(const Entity entity)
 	{
 		if(std::ranges::find(EntityStorageLocations, entity, &EntityStorageLocator::Entity) != EntityStorageLocations.end())
@@ -88,12 +103,12 @@ public:
 		return locator;
 	}
 
-	const std::vector<EntityStorageLocator>& GetEntityStorageLocators()
+	std::span<EntityStorageLocator const> GetEntityStorageLocators()
 	{
 		return EntityStorageLocations;
 	}
 
-	const std::vector<ComponentStorageLocator>& GetComponentStorageLocators()
+	std::span<ComponentStorageLocator const> GetComponentStorageLocators()
 	{
 		return ComponentStorageLocators;
 	}
@@ -147,5 +162,6 @@ private:
 	EntityType StorageEntityType;
 	std::vector<std::type_index> EntityComponentTypes;
 	std::vector<ComponentStorageLocator> ComponentStorageLocators;
+	std::map<std::type_index, IComponentStorage*> ComponentStoragePointers;
 	std::vector<EntityStorageLocator> EntityStorageLocations;
 };

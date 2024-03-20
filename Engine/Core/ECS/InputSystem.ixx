@@ -4,7 +4,7 @@ module;
 
 export module Systems.InputSystem;
 
-import ECS.System;
+import EncosyCore.System;
 import SystemData.InputSystem;
 import EncosyEngine.WindowManager;
 
@@ -21,7 +21,7 @@ class InputSystem : public System
 	friend class SystemManager;
 
 public:
-	InputSystem() : System(){}
+	InputSystem() {}
 	~InputSystem() {}
 
 	void AddEventToQueue(SDL_Event e)
@@ -33,7 +33,7 @@ protected:
 	void Init() override 
 	{
 		Type = SystemType::System;
-		SystemQueueIndex = 0;
+		RunSyncPoint = SystemSyncPoint::First;
 
 		AddSystemDataForWriting(&InputSystemDataComponent);
 	}

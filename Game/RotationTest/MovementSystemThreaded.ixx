@@ -5,8 +5,8 @@ module;
 
 export module StressTest.Systems.MovementSystemThreaded;
 
-import ECS.Entity;
-import ECS.System;
+import EncosyCore.Entity;
+import EncosyCore.SystemThreaded;
 import Components.TransformComponent;
 import Components.StaticComponent;
 import StressTest.Components.MovementComponent;
@@ -26,7 +26,7 @@ float RandomNumber0_1()
 	return (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
 }
 
-export class MovementSystemThreaded : public ThreadedSystem
+export class MovementSystemThreaded : public SystemThreaded
 {
 	friend class SystemManager;
 
@@ -38,27 +38,28 @@ protected:
 	void Init() override
 	{
 		Type = SystemType::PhysicsSystem;
-		SystemQueueIndex = 1100;
+		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
 
-		auto cameraEntityInfo = WorldEntityManager->GetEntityTypeInfo("CameraEntity");
+		auto cameraEntityInfo = GetEntityTypeInfo("CameraEntity");
 		cameraType = cameraEntityInfo.Type;
-		AddWantedComponentDataForWriting(&TransformComponents, &ThreadTransformComponents);
-		AddWantedComponentDataForWriting(&MovementComponents, &ThreadMovementComponents);
+		AddComponentQueryForWriting(&TransformComponents, &ThreadTransformComponents);
+		AddComponentQueryForWriting(&MovementComponents, &ThreadMovementComponents);
 
-		AddAlwaysFetchedEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
+		AddEntitiesForReading(cameraEntityInfo.Type, &CameraEntityComponents);
 		AddSystemDataForReading(&InputSystemDataStorage);
 		AddSystemDataForReading(&CameraControllerSystemDataStorage);
 
-		AddForbiddenComponentType<CameraComponent>();
-		AddForbiddenComponentType<StaticComponent>();
+		AddForbiddenComponentQuery<CameraComponent>();
+		AddForbiddenComponentQuery<StaticComponent>();
 	}
-	void PreUpdate(const double deltaTime) override {}
-	void Update(const double deltaTime) override 
+	void PreUpdate(const int thread, const double deltaTime) override {}
+	void Update(const int thread, const double deltaTime) override
 	{
+		if (thread != 0) { return; }
 		CameraControllerSystemData csData = GetSystemData(&CameraControllerSystemDataStorage);
 		mainCamera = GetEntityComponent(csData.MainCamera, cameraType, &CameraEntityComponents);
 	}
-	void UpdatePerEntityThreaded(int thread, const double deltaTime, Entity entity, EntityType entityType) override
+	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		InputSystemData input = GetSystemData(&InputSystemDataStorage);
 		//
@@ -78,7 +79,7 @@ protected:
 		tc.Orientation = MatrixCalculations::RotateByWorldAxisZ(tc.Orientation, mc.Speed * mc.Direction.z * deltaTime);
 	}
 
-	void PostUpdate(const double deltaTime) override {}
+	void PostUpdate(const int thread, const double deltaTime) override {}
 	void Destroy() override {}
 
 private:

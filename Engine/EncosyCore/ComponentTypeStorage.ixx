@@ -1,5 +1,5 @@
 module;
-export module ECS.ComponentTypeStorage;
+export module EncosyCore.ComponentTypeStorage;
 
 import <vector>;
 import <string>;
@@ -18,6 +18,8 @@ public:
 	virtual ~IComponentStorage() {}
 
 	virtual size_t GetComponentCount() = 0;
+
+protected:
 	virtual bool RemoveComponent(const size_t index) = 0;
 	virtual bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) = 0;
 	virtual std::unique_ptr<IComponentStorage> InitializeSimilarStorage() = 0;
@@ -43,7 +45,6 @@ export template <typename ComponentType>
 class ComponentTypeStorage: public IComponentStorage
 {
 	friend class ComponentManager;
-	friend class EntityTypeStorage;
 
 public:
 	ComponentTypeStorage()
@@ -58,6 +59,7 @@ public:
 		return Storage.size();
 	}
 
+protected:
 	/// <summary>
 	/// Removes component from specific index
 	/// </summary>
@@ -100,10 +102,9 @@ public:
 
 	void AddComponentToStorage() override
 	{
-		Storage.push_back(ComponentType());
+		Storage.emplace_back(ComponentType());
 	}
 
-protected:
 	/// <summary>
 	/// Adds a new Component to the vector.
 	/// </summary>
@@ -112,7 +113,7 @@ protected:
 
 	void AddComponentToStorage(const ComponentType component)
 	{
-		Storage.push_back(component);
+		Storage.emplace_back(component);
 	}
 
 	ComponentType* GetWriteReadComponent(const size_t id)
@@ -205,6 +206,7 @@ protected:
 	}
 
 	bool RemoveComponent(const size_t index) override {return false;}
+
 	bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) override
 	{
 		auto storage = static_cast<SystemDataStorage<ComponentType>*>(otherStorage);
