@@ -38,24 +38,26 @@ public:
 		{
 			std::vector<std::unique_ptr<IComponentStorage>> storage;
 			ComponentStorages.insert(std::pair(componentTypeId, std::move(storage)));
+			WorldSharedBetweenManagers->AddComponentStorageMutex(componentTypeId);
 			storageVectorIt = ComponentStorages.find(componentTypeId);
 		}
 		auto storage = std::make_unique<ComponentTypeStorage<ComponentType>>();
-		storageVectorIt->second.push_back(std::move(storage));
+		storageVectorIt->second.emplace_back(std::move(storage));
 
 		return { componentTypeId, storageVectorIt->second.size() - 1 };
 	}
 
 	template<typename ComponentType>
-	ComponentStorageLocator CreateSystemDataStorage(const ComponentType component)
+	ComponentStorageLocator CreateSystemDataStorage(ComponentType&& component)
 	{
 		std::type_index componentTypeId = typeid(ComponentType);
 
-		auto storage = std::make_unique<SystemDataStorage<ComponentType>>();
+		auto storage = std::make_unique<SystemDataStorage<std::remove_reference_t<ComponentType>>>();
 		auto storagePtr = storage.get();
 
 		SystemDataStorages.insert(std::make_pair(componentTypeId, std::move(storage)));
-		storagePtr->SetComponentData(component);
+		WorldSharedBetweenManagers->AddComponentStorageMutex(componentTypeId);
+		storagePtr->SetComponentData(std::forward<decltype(std::move(component))>(std::move(component)));
 
 		return { componentTypeId, SystemDataStorages.size() - 1 };
 	}
@@ -119,7 +121,7 @@ public:
 	}
 
 	template<typename ComponentType>
-	std::span<ComponentType const> GetReadOnlyStorageSpan(const ComponentStorageLocator locator)
+	std::span<ComponentType const> GetReadOnlyStorageSpan(const ComponentStorageLocator& locator)
 	{
 		RecordReadOnlyComponentAccess<ComponentType>();
 
@@ -138,7 +140,7 @@ public:
 	}
 
 	template<typename ComponentType>
-	std::span<ComponentType> GetWriteReadStorageSpan(const ComponentStorageLocator locator)
+	std::span<ComponentType> GetWriteReadStorageSpan(const ComponentStorageLocator& locator)
 	{
 		RecordWriteReadComponentAccess<ComponentType>();
 
@@ -177,27 +179,19 @@ public:
 	}
 
 	template<typename ComponentType>
-	void CreateNewComponentToStorageThreaded(const ComponentStorageLocator locator, const ComponentType component)
+	void CreateNewComponentToStorageThreaded(IComponentStorage* storageInterface, ComponentType&& component)
 	{
-		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
-		std::scoped_lock lock(DestructiveEditMutex);
-		storage->AddComponentToStorage(component);
+		const std::type_index componentTypeId = typeid(ComponentType);
+		std::scoped_lock lock(*WorldSharedBetweenManagers->GetComponentStorageMutex(componentTypeId));
+		storage->AddComponentToStorage(std::forward<decltype(std::move(component))>(std::move(component)));
 	}
-
 
 	template<typename ComponentType>
-	void CreateNewComponentToStorage(const ComponentStorageLocator locator, const ComponentType component)
+	void CreateNewComponentToStorage(IComponentStorage* storageInterface, ComponentType&& component)
 	{
-		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
-		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
-		storage->AddComponentToStorage(component);
-	}
-
-	void CreateNewComponentToStorage(const ComponentStorageLocator locator) const
-	{
-		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
-		storageInterface->AddComponentToStorage();
+		auto storagePointer = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		storagePointer->AddComponentToStorage(std::forward<decltype(std::move(component))>(std::move(component)));
 	}
 
 	void CreateNewComponentToStorage(IComponentStorage* storageInterface) const
@@ -205,15 +199,38 @@ public:
 		storageInterface->AddComponentToStorage();
 	}
 
-	void ResetComponentStorage(const ComponentStorageLocator locator) const
+	template<typename ComponentType>
+	void CreateNewComponentToStorageThreaded(const ComponentStorageLocator& locator, ComponentType&& component)
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		std::scoped_lock lock(*WorldSharedBetweenManagers->GetComponentStorageMutex(locator.ComponentType));
+		storage->AddComponentToStorage(std::forward<decltype(std::move(component))>(std::move(component)));
+	}
+
+	template<typename ComponentType>
+	void CreateNewComponentToStorage(const ComponentStorageLocator& locator, ComponentType&& component)
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		auto storagePointer = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		storagePointer->AddComponentToStorage(std::forward<decltype(std::move(component))>(std::move(component)));
+	}
+
+	void CreateNewComponentToStorage(const ComponentStorageLocator& locator) const
+	{
+		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
+		storageInterface->AddComponentToStorage();
+	}
+
+	void ResetComponentStorage(const ComponentStorageLocator& locator) const
 	{
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		storageInterface->Reset();
 	}
 
-	void ResetComponentStorageThreaded(const ComponentStorageLocator locator)
+	void ResetComponentStorageThreaded(const ComponentStorageLocator& locator)
 	{
-		std::scoped_lock lock(DestructiveEditMutex);
+		std::scoped_lock lock(*WorldSharedBetweenManagers->GetComponentStorageMutex(locator.ComponentType));
 
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		storageInterface->Reset();
@@ -223,16 +240,28 @@ protected:
 
 
 	template<typename ComponentType>
-	void ReplaceComponentData(const ComponentStorageLocator locator, const size_t componentIndex, const ComponentType component)
+	void ReplaceComponentData(const ComponentStorageLocator& locator, const size_t componentIndex, ComponentType&& component)
 	{
 		//Maybe needs a check if index is valid?
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
-		storage->SetComponentData(componentIndex, component);
+		storage->SetComponentData(componentIndex, std::move(component));
+	}
+	
+	template<typename ComponentType>
+	ComponentType GetReadOnlyComponentFromStorageThreaded(IComponentStorage* storageInterface, size_t index)
+	{
+		const std::type_index componentTypeId = typeid(ComponentType);
+		std::scoped_lock lock(*WorldSharedBetweenManagers->GetComponentStorageMutex(componentTypeId));
+		RecordReadOnlyComponentAccess<ComponentType>();
+
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		return storage->GetReadOnlyComponent(index);
 	}
 
+
 	template<typename ComponentType>
-	ComponentType GetReadOnlyComponentFromStorage(const ComponentStorageLocator locator, size_t index)
+	ComponentType GetReadOnlyComponentFromStorage(const ComponentStorageLocator& locator, size_t index)
 	{
 		RecordReadOnlyComponentAccess<ComponentType>();
 
@@ -251,7 +280,7 @@ protected:
 	}
 
 	template<typename ComponentType>
-	ComponentType* GetWriteReadComponentFromStorage(const ComponentStorageLocator locator, size_t index)
+	ComponentType* GetWriteReadComponentFromStorage(const ComponentStorageLocator& locator, size_t index)
 	{
 		RecordWriteReadComponentAccess<ComponentType>();
 
@@ -269,7 +298,7 @@ protected:
 		return storage->GetWriteReadComponent(index);
 	}
 
-	bool RemoveComponent(const ComponentStorageLocator locator, const size_t componentIndex) const
+	bool RemoveComponent(const ComponentStorageLocator& locator, const size_t componentIndex) const
 	{
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		return storageInterface->RemoveComponent(componentIndex);
@@ -280,7 +309,7 @@ protected:
 		return storageInterface->RemoveComponent(componentIndex);
 	}
 
-	IComponentStorage* GetComponentStoragePointer(const ComponentStorageLocator locator)
+	IComponentStorage* GetComponentStoragePointer(const ComponentStorageLocator& locator)
 	{
 		return ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 	}
@@ -289,19 +318,19 @@ protected:
 	{
 		auto& storagesVector = ComponentStorages.find(componentType)->second;
 		auto newStorage = storagesVector[0]->InitializeSimilarStorage();
-		storagesVector.push_back(std::move(newStorage));
+		storagesVector.emplace_back(std::move(newStorage));
 		return { componentType, storagesVector.size() - 1 };;
 	}
 
-	ComponentStorageLocator CreateSimilarStorage(const ComponentStorageLocator locator)
+	ComponentStorageLocator CreateSimilarStorage(const ComponentStorageLocator& locator)
 	{
 		auto& storagesVector = ComponentStorages.find(locator.ComponentType)->second;
 		auto newStorage = storagesVector[locator.ComponentStorageIndex]->InitializeSimilarStorage();
-		storagesVector.push_back(std::move(newStorage));
+		storagesVector.emplace_back(std::move(newStorage));
 		return { locator.ComponentType, storagesVector.size() - 1 };;
 	}
 
-	bool CopyComponentToOtherStorage(const ComponentStorageLocator origin, const ComponentStorageLocator destination, const size_t componentIndex)
+	bool CopyComponentToOtherStorage(const ComponentStorageLocator& origin, const ComponentStorageLocator& destination, const size_t componentIndex)
 	{
 		IComponentStorage* originInterface = ComponentStorages.find(origin.ComponentType)->second[origin.ComponentStorageIndex].get();
 		IComponentStorage* destinationInterface = ComponentStorages.find(destination.ComponentType)->second[destination.ComponentStorageIndex].get();
@@ -313,11 +342,16 @@ protected:
 		return originInterface->CopyComponentToOtherStorage(componentIndex, destinationInterface);
 	}
 
+	bool MoveComponentToOtherStorage(IComponentStorage* originInterface, IComponentStorage* destinationInterface, const size_t componentIndex)
+	{
+		return originInterface->MoveComponentToOtherStorage(componentIndex, destinationInterface);
+	}
+
+	
+
 
 private:
 	SharedBetweenManagers* WorldSharedBetweenManagers;
-
-	std::mutex DestructiveEditMutex;
 
 	std::map<std::type_index, std::vector<std::unique_ptr<IComponentStorage>>> ComponentStorages;
 	std::map<std::type_index, std::unique_ptr<IComponentStorage>> SystemDataStorages;

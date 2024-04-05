@@ -33,18 +33,18 @@ export class System : public SystemBase
 
 public:
 	System() {}
-	~System() {}
+	~System() override {}
 
 protected:
 
-	virtual void Init() = 0;
-	virtual void PreUpdate(const double deltaTime) = 0;
-	virtual void Update(const double deltaTime) = 0;
-	virtual void PostUpdate(const double deltaTime) = 0;
-	virtual void Destroy() = 0;
+	// virtual void Init() = 0; //SystemBase
+	virtual void PreUpdate(double deltaTime) = 0;
+	virtual void Update(double deltaTime) = 0;
+	virtual void PostUpdate(double deltaTime) = 0;
+	// virtual void Destroy() = 0; //SystemBase
 
 
-	virtual void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) = 0;
+	virtual void UpdatePerEntity(double deltaTime, Entity entity, EntityType entityType) = 0;
 
 	template <typename ComponentType>
 	void AddComponentQueryForReading(ReadOnlyComponentStorage<ComponentType>* storage)
@@ -83,13 +83,13 @@ protected:
 	}
 
 	template <typename ComponentType>
-	void AddComponentsForReading(ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
+	void AddComponentsForReading(ReadOnlyComponentStorage<ComponentType>* storage)
 	{
 		AddReadOnlyAlwaysFetchComponents(&storage->Storage);
 	}
 
 	template <typename ComponentType>
-	void AddComponentsForWriting(WriteReadAlwaysFetchedStorage<ComponentType>* storage)
+	void AddComponentsForWriting(WriteReadComponentStorage<ComponentType>* storage)
 	{
 		AddWriteReadAlwaysFetchComponents(&storage->Storage);
 	}
@@ -182,31 +182,31 @@ protected:
 	}
 
 	template<typename...ComponentTypes>
-	Entity CreateEntityWithData(const EntityType entityType, const ComponentTypes... components)
+	Entity CreateEntityWithData(const EntityType entityType, ComponentTypes&&... components)
 	{
-		return WorldEntityManager->CreateEntityWithData(entityType, components...);
+		return WorldEntityManager->CreateEntityWithData(entityType, std::forward<decltype(std::move(components))>(std::move(components))...);
 	}
 
-	bool DeleteEntity(const Entity entity) const
+	bool DeleteEntity(const Entity entity, const EntityType entityType) const
 	{
-		return WorldEntityManager->DeleteEntity(entity);
+		return WorldEntityManager->DeleteEntity(entity, entityType);
 	}
 
 	template<typename... DeleteComponentTypes, typename... NewComponentTypes>
-	bool ModifyEntityComponents(const Entity entity, const EntityType entityType, NewComponentTypes... components)
+	bool ModifyEntityComponents(const Entity entity, const EntityType entityType, NewComponentTypes&&... newComponents)
 	{
-		EntityType newType = WorldEntityManager->ModifyEntityComponents<DeleteComponentTypes..., NewComponentTypes...>(entity, entityType, components...);
+		EntityType newType = WorldEntityManager->ModifyEntityComponents<DeleteComponentTypes...>(entity, entityType, std::forward<decltype(std::move(newComponents))>(std::move(newComponents))...);
 		return newType;
 	}
 
 
 	template<typename ComponentType>
-	void CreateNewComponentToStorage(const ComponentStorageLocator locator, const ComponentType component)
+	void CreateNewComponentToStorage(const ComponentStorageLocator& locator, ComponentType&& component)
 	{
 		WorldComponentManager->CreateNewComponentToStorage(locator, component);
 	}
 
-	void ResetComponentStorage(const ComponentStorageLocator locator) const
+	void ResetComponentStorage(const ComponentStorageLocator& locator) const
 	{
 		WorldComponentManager->ResetComponentStorage(locator);
 	}
@@ -237,10 +237,10 @@ private:
 	{
 		for (size_t vectorIndex = 0; vectorIndex < FetchedEntitiesInfo.size(); vectorIndex++)
 		{
-			auto info = FetchedEntitiesInfo[vectorIndex];
+			const auto& info = FetchedEntitiesInfo[vectorIndex];
 			for (size_t spanIndex = 0; spanIndex < info.EntityLocators.size(); spanIndex++)
 			{
-				auto locator = info.EntityLocators[spanIndex];
+				const auto& locator = info.EntityLocators[spanIndex];
 				RuntimeThreadInfo.outerIndex = vectorIndex;
 				RuntimeThreadInfo.innerIndexWrite = spanIndex;
 				RuntimeThreadInfo.innerIndexRead = spanIndex;

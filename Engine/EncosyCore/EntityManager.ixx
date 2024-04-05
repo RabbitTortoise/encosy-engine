@@ -22,6 +22,8 @@ import <span>;
 import <unordered_set>;
 import <unordered_map>;
 import <mutex>;
+import <concepts>;
+
 
 export struct EntitySpanFetchInfo
 {
@@ -86,95 +88,71 @@ public:
 	~EntityManager() {}
 
 	template<typename...ComponentType>
-	bool ReplaceEntityComponentData(const Entity entity, const ComponentType...Components)
+	bool ReplaceEntityComponentData(const Entity entity, const EntityType entityType, ComponentType&&... components)
 	{
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return false;
-		}
-		const auto storageIt = EntityStorages.find(entityType->second);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
-			fmt::println("ERROR: Entity {} has invalid type in EntityTypeMap: {}", entity, entityType->second);
+			fmt::println("ERROR (EntityManager.ReplaceEntityComponentData): Could not find storage for entityType: {}", entityType);
 			return false;
 		}
 		auto entityComponentIndex = storageIt->second->GetEntityComponentIndex(entity);
-		(ReplaceEntityComponent(storageIt->second.get(), entityComponentIndex, Components), ...);
+		(ReplaceEntityComponent(storageIt->second.get(), entityComponentIndex, std::forward<decltype(std::move(components))>(std::move(components))), ...);
 		return true;
 	}	
 
 	template<typename...ComponentTypes>
-	Entity CreateEntityWithData(const std::string entityTypeName, const ComponentTypes...components)
+	Entity CreateEntityWithData(const std::string entityTypeName, ComponentTypes&&... components)
 	{
-		return CreateEntityWithData(GetEntityTypeInfo(entityTypeName).Type, components...);
+		return CreateEntityWithData(GetEntityTypeInfo(entityTypeName).Type, std::forward<decltype(std::move(components))>(std::move(components))...);
 	}
 
 	template<typename...ComponentTypes>
-	Entity CreateEntityWithData(const ComponentTypes...components)
+	Entity CreateEntityWithData(ComponentTypes&&... components)
 	{
-		auto componentTypeIndexes = GatherTypeIndexes<ComponentTypes...>();
-		EntityType typeId = FindEntityTypeWithComponents(componentTypeIndexes);
+		auto componentTypeIndexes = GatherTypeIndexes<std::remove_reference_t<decltype(components)>...>();
+		EntityType entityType = FindEntityTypeWithComponents(componentTypeIndexes);
 
-		return CreateEntityWithData(typeId, components...);
+		return CreateEntityWithData(entityType, std::forward<decltype(std::move(components))>(std::move(components))...);
 	}
 
 	template<typename...ComponentTypes>
-	Entity CreateEntityWithData(const EntityType entityType, const ComponentTypes...components)
+	Entity CreateEntityWithData(const EntityType entityType, ComponentTypes&&... components)
 	{
 		EntityOperationResult entityOperationResult = GetEntityTypeInfo(entityType);
 		if (entityOperationResult.OperationResult == EntityOperationResult::Result::NotFound)
 		{
 			const std::string name = std::format("EntityType{}", EntityTypesCreated);
-			entityOperationResult = CreateEntityType<ComponentTypes...>(name);
+			entityOperationResult = CreateEntityType<std::remove_reference_t<ComponentTypes>...>(name);
 		}
-		auto storage = EntityStorages.find(entityOperationResult.Type)->second.get();
-		storage->AddEntityToStorage(EntitiesCreated);
-		(CreateEntityComponent(storage, components), ...);
+		auto storage = GetStorageByEntityType(entityOperationResult.Type);
 
-		const Entity createdEntity = EntitiesCreated;
-		EntityTypeMap.insert(std::make_pair(EntitiesCreated, entityOperationResult.Type));
-		EntitiesCreated++;
-		CurrentEntityCount++;
+		const Entity createdEntity = (EntitiesCreatedAtomic.exchange(EntitiesCreatedAtomic + 1));
+		++CurrentEntityCountAtomic;
 
+		storage->AddEntityToStorage(createdEntity);
+		(CreateEntityComponent(storage, std::forward<decltype(std::move(components))>(std::move(components))), ...);
 		return createdEntity;
 	}
 
 	template<typename...ComponentTypes>
-	Entity CreateEntityWithDataThreaded(const EntityType entityType, const std::unordered_set<EntityType>& access, const ComponentTypes...components)
+	Entity CreateEntityWithDataThreaded(const EntityType entityType, ComponentTypes&&...components)
 	{
+		std::scoped_lock storageLock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType));
 
-		if (!access.contains(entityType))
-		{
-			fmt::println("ERROR: CreateEntityWithDataThreaded(): Passed access set for entity creation did not contain the correct entity type, required: {}", entityType);
-			return false;
-		}
+		auto storage = GetStorageByEntityType(entityType);
 
-		EntityOperationResult entityOperationResult = GetEntityTypeInfo(entityType);
+		const Entity createdEntity = (EntitiesCreatedAtomic.exchange(EntitiesCreatedAtomic+1));
+		++CurrentEntityCountAtomic;
 
-		std::scoped_lock lock(DestructiveEditMutex);
-
-		if (entityOperationResult.OperationResult == EntityOperationResult::Result::NotFound)
-		{
-			const std::string name = std::format("EntityType{}", EntityTypesCreated);
-			entityOperationResult = CreateEntityType<ComponentTypes...>(name);
-		}
-		auto storage = EntityStorages.find(entityOperationResult.Type)->second.get();
-		storage->AddEntityToStorage(EntitiesCreated);
-		(CreateEntityComponent(storage, components), ...);
-
-		const Entity createdEntity = EntitiesCreated;
-
-		EntityTypeMap.insert(std::make_pair(EntitiesCreated, entityOperationResult.Type));
-		EntitiesCreated++;
-		CurrentEntityCount++;
+		storage->AddEntityToStorage(createdEntity);
+		(CreateEntityComponent(storage, std::forward<decltype(std::move(components))>(std::move(components))), ...);
 
 		return createdEntity;
 	}
 
 	template<typename...ComponentTypes>
-	EntityOperationResult CreateEntityType(const std::string entityTypeName)
+	EntityOperationResult CreateEntityType(const std::string& entityTypeName)
 	{
 		auto componentTypeIndexes = GatherTypeIndexes<ComponentTypes...>();
 		if (EntityWithComponentsExists(componentTypeIndexes))
@@ -236,21 +214,18 @@ public:
 	}
 
 	//TODO: This is a brute force way to check compatible entities. This could be optimized by only updating this when a new type of entity is added.
-	std::vector<EntityType> GetEntityTypesWithComponentConditions(
-		const std::unordered_set<std::type_index>& wantedReadOnlyTypes,
-		const std::unordered_set<std::type_index>& wantedWriteReadTypes,
-		const std::unordered_set<std::type_index>& forbiddenTypes)
+	void GetEntityTypesWithComponentConditions(
+		std::vector<EntityType>& out,
+		const std::unordered_set<std::type_index>& fetchedReadOnlyTypes,
+		const std::unordered_set<std::type_index>& fetchedWriteReadTypes,
+		const std::unordered_set<std::type_index>& requiredTypes,
+		const std::unordered_set<std::type_index>& forbiddenTypes) const
 	{
-		std::vector<EntityType> entityTypes;
-
-		if (wantedReadOnlyTypes.size() == 0 && wantedWriteReadTypes.size() == 0)
-		{
-			return entityTypes;
-		}
 
 		for (auto const& pair : EntityStorages)
 		{
 			auto componentTypes = pair.second->GetEntityComponentTypes();
+
 			bool forbiddenFound = false;
 			for (auto const& type : forbiddenTypes)
 			{
@@ -259,8 +234,16 @@ public:
 			}
 			if (forbiddenFound) { continue; }
 
+			bool requiredFound = true;
+			for (auto const& type : requiredTypes)
+			{
+				requiredFound = (std::ranges::find(componentTypes, type) != componentTypes.end());
+				if (!requiredFound) { requiredFound = false; break; }
+			}
+			if (!requiredFound) { continue; }
+
 			bool wantedFound = true;
-			for (auto const& type : wantedReadOnlyTypes)
+			for (auto const& type : fetchedReadOnlyTypes)
 			{
 				wantedFound = (std::ranges::find(componentTypes, type) != componentTypes.end());
 				if (!wantedFound) { wantedFound = false; break; }
@@ -268,16 +251,15 @@ public:
 			if (!wantedFound) { continue; }
 
 			wantedFound = true;
-			for (auto const& type : wantedWriteReadTypes)
+			for (auto const& type : fetchedWriteReadTypes)
 			{
 				wantedFound = (std::ranges::find(componentTypes, type) != componentTypes.end());
 				if (!wantedFound) { wantedFound = false; break; }
 			}
 			if (!wantedFound) { continue; }
 
-			entityTypes.push_back(pair.first);
+			out.emplace_back(pair.first);
 		}
-		return entityTypes;
 	}
 
 	std::vector<EntityType> GetEntityTypesWithComponent(const std::type_index componentType) const
@@ -289,28 +271,28 @@ public:
 			auto componentTypes = pair.second->GetEntityComponentTypes();
 			if(std::ranges::find(componentTypes, componentType) != componentTypes.end())
 			{
-				entityTypes.push_back(pair.first);
+				entityTypes.emplace_back(pair.first);
 			}
 		}
 		return entityTypes;
 	}
 
-	EntitySpanFetchInfo GetEntityFetchInfo(const EntityType typeId) const
+	EntitySpanFetchInfo GetEntityFetchInfo(const EntityType entityType) const
 	{
-		const auto storage = EntityStorages.find(typeId);
-		EntitySpanFetchInfo info = { .Type = typeId, .TypeName = EntityTypeNames.find(typeId)->second, .EntityCount = storage->second->GetEntityCount(), .EntityLocators = storage->second->GetEntityStorageLocators()};
+		const auto storage = GetStorageByEntityType(entityType);
+		EntitySpanFetchInfo info = { .Type = entityType, .TypeName = EntityTypeNames.find(entityType)->second, .EntityCount = storage->GetEntityCount(), .EntityLocators = storage->GetEntityStorageLocators()};
 		return info;
 	}
 
-	std::vector<EntitySpanFetchInfo> GetEntityFetchInfo(const std::vector<EntityType>& typeIds) const
+	std::vector<EntitySpanFetchInfo> GetEntityFetchInfo(const std::vector<EntityType>& entityTypes) const
 	{
 		std::vector<EntitySpanFetchInfo> info;
-		info.reserve(typeIds.size());
+		info.reserve(entityTypes.size());
 
-		for (auto id : typeIds)
+		for (auto entityType : entityTypes)
 		{
-			const auto storage = EntityStorages.find(id);
-			EntitySpanFetchInfo i = { .Type = id, .TypeName = EntityTypeNames.find(id)->second, .EntityCount = storage->second->GetEntityCount(), .EntityLocators = storage->second->GetEntityStorageLocators() };
+			const auto storage = GetStorageByEntityType(entityType);
+			EntitySpanFetchInfo i = { .Type = entityType, .TypeName = EntityTypeNames.find(entityType)->second, .EntityCount = storage->GetEntityCount(), .EntityLocators = storage->GetEntityStorageLocators() };
 			info.emplace_back(i);
 		}
 		return info;
@@ -335,19 +317,52 @@ public:
 
 	Entity GetEntityFromComponentIndex(EntityType entityType, EntityComponentIndex componentIndex)
 	{
-		auto const& it = EntityStorages.find(entityType);
-		return it->second->GetEntityFromComponentIndex(componentIndex);
+		auto const& storage = GetStorageByEntityType(entityType);
+		return storage->GetEntityFromComponentIndex(componentIndex);
 	}
 
 	size_t GetCurrentEntityCount() const
 	{
-		return CurrentEntityCount;
+		return CurrentEntityCountAtomic.load();
 	}
 
 	template<typename ComponentType>
 	ComponentType GetReadOnlyComponentFromEntity(Entity entity, EntityType entityType)
 	{
-		const auto storageIt = EntityStorages.find(entityType);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
+		if (storageIt == EntityStorages.end())
+		{
+			fmt::println("ERROR: Can't find type in EntityTypeMap: {}", entity, entityType);
+			return {};
+		}
+		const auto storage = storageIt->second.get();
+		auto componentStorage = storage->GetComponentStoragePointer<ComponentType>();
+		std::scoped_lock storageLock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType));
+		const EntityComponentIndex index = storage->GetEntityComponentIndex(entity);
+		return WorldComponentManager->GetReadOnlyComponentFromStorage<ComponentType>(componentStorage, index);
+	}
+
+	template<typename ComponentType>
+	ComponentType GetReadOnlyComponentFromEntityThreaded(Entity entity)
+	{
+		const EntityType entityType = GetEntityTypeThreaded(entity);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
+		if (storageIt == EntityStorages.end())
+		{
+			fmt::println("ERROR: Can't find type in EntityTypeMap: {}", entity, entityType);
+			return {};
+		}
+		const auto storage = storageIt->second.get();
+		auto componentStorage = storage->GetComponentStoragePointer<ComponentType>();
+		std::scoped_lock storageLock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType));
+		const EntityComponentIndex index = storage->GetEntityComponentIndex(entity);
+		return WorldComponentManager->GetReadOnlyComponentFromStorageThreaded<ComponentType>(componentStorage, index);
+	}
+
+	template<typename ComponentType>
+	ComponentType GetReadOnlyComponentFromEntityThreaded(Entity entity, const EntityType entityType)
+	{
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
 			fmt::println("ERROR: Can't find type in EntityTypeMap: {}", entity, entityType);
@@ -356,39 +371,13 @@ public:
 		const auto storage = storageIt->second.get();
 		auto componentStorage = storage->GetComponentStoragePointer<ComponentType>();
 		const EntityComponentIndex index = storage->GetEntityComponentIndex(entity);
-		return WorldComponentManager->GetReadOnlyComponentFromStorage<ComponentType>(componentStorage, index);
-	}
-
-
-	template<typename ComponentType>
-	ComponentType GetReadOnlyComponentFromEntity(Entity entity)
-	{
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return {};
-		}
-		return GetReadOnlyComponentFromEntity<ComponentType>(entity, entityType->second);
-	}
-
-	template<typename ComponentType>
-	ComponentType GetReadOnlyComponentFromEntityThreaded(Entity entity)
-	{
-		std::scoped_lock lock(DestructiveEditMutex);
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return {};
-		}
-		return GetReadOnlyComponentFromEntity<ComponentType>(entity, entityType->second);
+		return WorldComponentManager->GetReadOnlyComponentFromStorageThreaded<ComponentType>(componentStorage, index);
 	}
 
 	template<typename ComponentType>
 	ComponentType* GetWriteReadComponentFromEntity(Entity entity, EntityType entityType)
 	{
-		const auto storageIt = EntityStorages.find(entityType);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
 			fmt::println("ERROR: Can't find type in EntityTypeMap: {}", entity, entityType);
@@ -400,18 +389,6 @@ public:
 		return WorldComponentManager->GetWriteReadComponentFromStorage<ComponentType>(componentStorage, index);
 	}
 
-	template<typename ComponentType>
-	ComponentType* GetWriteReadComponentFromEntity(Entity entity)
-	{
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return {};
-		}
-		return GetWriteReadComponentFromEntity<ComponentType>(entity, entityType->second);
-	}
-
 	EntityComponentIndex GetEntityComponentIndex(Entity entity)
 	{
 		const auto storage = GetStorageByEntity(entity);
@@ -420,7 +397,7 @@ public:
 
 	EntityComponentIndex GetEntityComponentIndex(Entity entity, EntityType entityType)
 	{
-		const auto storageIt = EntityStorages.find(entityType);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
 			fmt::println("ERROR: No storage found for given EntityType", entity, entityType);
@@ -430,58 +407,60 @@ public:
 		return storage->GetEntityComponentIndex(entity);
 	};
 
-	typedef std::_List_iterator<std::_List_val<std::_List_simple_types<std::pair<const unsigned long long, unsigned long long>>>> EntityTypeMapIt;
 
-	bool DeleteEntityThreaded(const Entity entity, const std::unordered_set<EntityType>& access)
+	bool DeleteEntityThreaded(const Entity entity, EntityType entityType)
 	{
-		std::scoped_lock lock(DestructiveEditMutex);
-
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return false;
-		}
-		if (!access.contains(entityType->second))
-		{
-			fmt::println("ERROR: DeleteEntityThreaded(): Passed access set for entity {} did not contain the correct entity type, required: {}", entity, entityType->second);
-			return false;
-		}
-		return DeleteEntity(entity, entityType);
-	}
-
-	bool DeleteEntity(const Entity entity)
-	{
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return false;
-		}
-		
-		return DeleteEntity(entity, entityType);
-	}
-
-	bool DeleteEntity(const Entity entity, const EntityTypeMapIt& entityType)
-	{
-		const auto storageIt = EntityStorages.find(entityType->second);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
-			fmt::println("ERROR: No storage found for given EntityType", entity, entityType->second);
+			fmt::println("ERROR: No storage found for given EntityType", entity, entityType);
 			return false;
 		}
 		const auto storage = storageIt->second.get();
+
+		std::scoped_lock storageLock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType));
+
 		const auto entityComponentIndex = storage->GetEntityComponentIndex(entity);
 		const auto componentStorageLocators = storage->GetComponentStorageLocators();
-		if(storage->RemoveEntity(entity))
+		if (storage->RemoveEntity(entity))
 		{
 			for (const auto& locator : componentStorageLocators)
 			{
 				auto componentStorage = storage->GetComponentStoragePointer(locator.ComponentType);
 				WorldComponentManager->RemoveComponent(componentStorage, entityComponentIndex);
 			}
-			EntityTypeMap.erase(entityType);
-			CurrentEntityCount--;
+
+			--CurrentEntityCountAtomic;
+			return true;
+		}
+		return false;
+
+	}
+
+	bool DeleteEntity(const Entity entity)
+	{
+		return DeleteEntity(entity, GetEntityType(entity));
+	}
+
+	bool DeleteEntity(const Entity entity, const EntityType entityType)
+	{
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
+		if (storageIt == EntityStorages.end())
+		{
+			fmt::println("ERROR: No storage found for given EntityType", entity, entityType);
+			return false;
+		}
+		const auto storage = storageIt->second.get();
+		const auto entityComponentIndex = storage->GetEntityComponentIndex(entity);
+		const auto componentStorageLocators = storage->GetComponentStorageLocators();
+		if (storage->RemoveEntity(entity))
+		{
+			for (const auto& locator : componentStorageLocators)
+			{
+				auto componentStorage = storage->GetComponentStoragePointer(locator.ComponentType);
+				WorldComponentManager->RemoveComponent(componentStorage, entityComponentIndex);
+			}
+			--CurrentEntityCountAtomic;
 			return true;
 		}
 		return false;
@@ -490,17 +469,16 @@ public:
 	template<typename ComponentType>
 	bool HasComponentType(const Entity entity) const
 	{
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return false;
-		}
+		return HasComponentType<ComponentType>(entity, GetEntityType(entity));
+	}
 
-		const auto storageIt = EntityStorages.find(entityType->second);
+	template<typename ComponentType>
+	bool HasComponentType(const Entity entity, const EntityType entityType) const
+	{
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
-			fmt::println("ERROR: No storage found for given EntityType", entity, entityType->second);
+			fmt::println("ERROR: No storage found for given EntityType", entity, entityType);
 			return false;
 		}
 		const auto storage = storageIt->second.get();
@@ -510,22 +488,15 @@ public:
 	template<typename ComponentType>
 	bool HasComponentTypeThreaded(const Entity entity)
 	{
-		std::scoped_lock lock(DestructiveEditMutex);
-
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
-		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return false;
-		}
-
-		const auto storageIt = EntityStorages.find(entityType->second);
+		const auto entityType = GetEntityTypeThreaded(entity);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
-			fmt::println("ERROR: No storage found for given EntityType", entity, entityType->second);
+			fmt::println("ERROR: No storage found for given EntityType", entity, entityType);
 			return false;
 		}
 		const auto storage = storageIt->second.get();
+
 		return storage->HasComponentType<ComponentType>();
 	}
 
@@ -537,15 +508,9 @@ public:
 	}
 
 	template<typename... DeleteComponentTypes, typename... NewComponentTypes>
-	EntityType ModifyEntityComponentsThreaded(const Entity entity, const EntityType entityType, const std::unordered_set<EntityType>& access, NewComponentTypes... newComponents)
+	bool ModifyEntityComponentsThreaded(const Entity entity, const EntityType entityType, const EntityType newEntityType, NewComponentTypes&&... newComponents)
 	{
-		if (!access.contains(entityType))
-		{
-			fmt::println("ERROR: ModifyEntityComponentsThreaded(): Passed access set for entity {} did not contain the original entity type, required: {}", entity, entityType);
-			return false;
-		}
-
-		std::scoped_lock lock(DestructiveEditMutex);
+		std::scoped_lock lock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType), *WorldSharedBetweenManagers->GetEntityStorageMutex(newEntityType));
 
 		auto oldStorage = GetStorageByEntityType(entityType);
 		auto entityLocator = oldStorage->GetEntityStorageLocator(entity);
@@ -565,22 +530,22 @@ public:
 
 		// Remove deleted components from copy list.
 		auto copyLocators = componentStorageLocators;
-		for (auto type : deleteTypes)
+		for (const auto& type : deleteTypes)
 		{
 			auto it = std::ranges::find(copyLocators, type, &ComponentStorageLocator::ComponentType);
 			copyLocators.erase(it);
 		}
 		// Gather component types that are replaced
-		for (auto locator : copyLocators)
+		for (const auto& locator : copyLocators)
 		{
 			auto it = std::ranges::find(newTypes, locator.ComponentType);
 			if (it != newTypes.end())
 			{
-				replacedTypes.push_back(*it);
+				replacedTypes.emplace_back(*it);
 			}
 		}
 		// Gather component types that are copied
-		for (auto type : newTypes)
+		for (const auto& type : newTypes)
 		{
 			auto it = std::ranges::find(copyLocators, type, &ComponentStorageLocator::ComponentType);
 			if (it != copyLocators.end())
@@ -589,11 +554,11 @@ public:
 			}
 		}
 		// Gather component types the new storage will have
-		for (auto locator : copyLocators)
+		for (const auto& locator : copyLocators)
 		{
 			if (std::ranges::find(newStorageTypes, locator.ComponentType) == newStorageTypes.end())
 			{
-				newStorageTypes.push_back(locator.ComponentType);
+				newStorageTypes.emplace_back(locator.ComponentType);
 			}
 		}
 
@@ -609,11 +574,11 @@ public:
 			fmt::println("ERROR: ModifyEntityComponentsThreaded(): The new EntityType must exist when using the threaded version of this function!");
 			abort();
 		}
-		auto newEntityType = newStorage->GetStorageEntityType();
-		if (!access.contains(newEntityType))
+		auto foundNewEntityType = newStorage->GetStorageEntityType();
+		if(foundNewEntityType != newEntityType)
 		{
-			fmt::println("ERROR: ModifyEntityComponentsThreaded(): Passed access set for entity {} did not contain the modified entity type, required: {}", entity, newEntityType);
-			abort();
+			fmt::println("ERROR: ModifyEntityComponentsThreaded(): The requested modifications did not transform the entity to correct type! New {}, expected {}", foundNewEntityType, newEntityType);
+			return false;
 		}
 
 		auto newStorageLocators = newStorage->GetComponentStorageLocators();
@@ -621,11 +586,11 @@ public:
 		{
 			if (std::ranges::find(copyLocators, locator.ComponentType, &ComponentStorageLocator::ComponentType) != copyLocators.end())
 			{
-				newCopyStorageLocators.push_back(locator);
+				newCopyStorageLocators.emplace_back(locator);
 			}
 			else
 			{
-				newCreatedStorageLocators.push_back(locator);
+				newCreatedStorageLocators.emplace_back(locator);
 			}
 		}
 
@@ -637,7 +602,7 @@ public:
 			auto origin = *std::ranges::find(copyLocators, destination.ComponentType, &ComponentStorageLocator::ComponentType);
 			auto originStorage = oldStorage->GetComponentStoragePointer(origin.ComponentType);
 			auto destinationStorage = newStorage->GetComponentStoragePointer(destination.ComponentType);
-			if (!WorldComponentManager->CopyComponentToOtherStorage(originStorage, destinationStorage, entityLocator.ComponentIndex))
+			if (!WorldComponentManager->MoveComponentToOtherStorage(originStorage, destinationStorage, entityLocator.ComponentIndex))
 			{
 				fmt::println("ERROR: Component copy to new storage failed!");
 			};
@@ -666,18 +631,15 @@ public:
 		}
 
 		// Add the new components to their storages
-		(AddComponentToNewStorage(newComponents, newCreatedStorageLocators), ...);
+		(AddComponentToNewStorage(std::forward<decltype(std::move(newComponents))>(std::move(newComponents)), newCreatedStorageLocators), ...);
 		// Delete entity from old storages.
 		oldStorage->RemoveEntity(entity);
-
-		auto it = EntityTypeMap.find(entity);
-		it->second = newStorage->GetStorageEntityType();
 
 		return true;
 	}
 
 	template<typename... DeleteComponentTypes, typename... NewComponentTypes>
-	EntityType ModifyEntityComponents(const Entity entity, const EntityType entityType, NewComponentTypes... newComponents)
+	bool ModifyEntityComponents(const Entity entity, const EntityType entityType, NewComponentTypes&&... newComponents)
 	{
 		auto oldStorage = GetStorageByEntityType(entityType);
 		auto entityLocator = oldStorage->GetEntityStorageLocator(entity);
@@ -697,22 +659,22 @@ public:
 
 		// Remove deleted components from copy list.
 		auto copyLocators = componentStorageLocators;
-		for (auto type : deleteTypes)
+		for (const auto& type : deleteTypes)
 		{
 			auto it = std::ranges::find(copyLocators, type, &ComponentStorageLocator::ComponentType);
 			copyLocators.erase(it);
 		}
 		// Gather component types that are replaced
-		for (auto locator : copyLocators)
+		for (const auto& locator : copyLocators)
 		{
 			auto it = std::ranges::find(newTypes, locator.ComponentType);
 			if (it != newTypes.end())
 			{
-				replacedTypes.push_back(*it);
+				replacedTypes.emplace_back(*it);
 			}
 		}
 		// Gather component types that are copied
-		for (auto type : newTypes)
+		for (const auto& type : newTypes)
 		{
 			auto it = std::ranges::find(copyLocators, type, &ComponentStorageLocator::ComponentType);
 			if (it != copyLocators.end())
@@ -721,11 +683,11 @@ public:
 			}
 		}
 		// Gather component types the new storage will have
-		for (auto locator : copyLocators)
+		for (const auto& locator : copyLocators)
 		{
 			if (std::ranges::find(newStorageTypes, locator.ComponentType) == newStorageTypes.end())
 			{
-				newStorageTypes.push_back(locator.ComponentType);
+				newStorageTypes.emplace_back(locator.ComponentType);
 			}
 		}
 
@@ -745,7 +707,7 @@ public:
 			for (auto locator : copyLocators)
 			{
 				auto newlocator = WorldComponentManager->CreateSimilarStorage(locator);
-				newCopyStorageLocators.push_back(newlocator);
+				newCopyStorageLocators.emplace_back(newlocator);
 				newStorage->AddComponentType(newlocator, WorldComponentManager->GetComponentStoragePointer(newlocator));
 			}
 			(CreateNewStorages<NewComponentTypes>(newCreatedStorageLocators, newTypes), ...);
@@ -762,11 +724,11 @@ public:
 				auto it = std::ranges::find(copyLocators, locator.ComponentType, &ComponentStorageLocator::ComponentType);
 				if (it != copyLocators.end())
 				{
-					newCopyStorageLocators.push_back(locator);
+					newCopyStorageLocators.emplace_back(locator);
 				}
 				else
 				{
-					newCreatedStorageLocators.push_back(locator);
+					newCreatedStorageLocators.emplace_back(locator);
 				}
 			}
 		}
@@ -779,7 +741,7 @@ public:
 			auto origin = *std::ranges::find(copyLocators, destination.ComponentType, &ComponentStorageLocator::ComponentType);
 			auto originStorage = oldStorage->GetComponentStoragePointer(origin.ComponentType);
 			auto destinationStorage = newStorage->GetComponentStoragePointer(destination.ComponentType);
-			if (!WorldComponentManager->CopyComponentToOtherStorage(originStorage, destinationStorage, entityLocator.ComponentIndex))
+			if (!WorldComponentManager->MoveComponentToOtherStorage(originStorage, destinationStorage, entityLocator.ComponentIndex))
 			{
 				fmt::println("ERROR: Component copy to new storage failed!");
 			};
@@ -808,13 +770,10 @@ public:
 		}
 
 		// Add the new components to their storages
-		(AddComponentToNewStorage(newComponents, newCreatedStorageLocators), ...);
+		(AddComponentToNewStorage(std::forward<decltype(std::move(newComponents))>(std::move(newComponents)), newCreatedStorageLocators), ...);
 
 		// Delete entity from old storages.
 		oldStorage->RemoveEntity(entity);
-
-		auto it = EntityTypeMap.find(entity);
-		it->second = newStorage->GetStorageEntityType();
 
 		return true;
 	}
@@ -823,11 +782,11 @@ public:
 protected:
 
 	template<typename ComponentType>
-	void AddComponentToNewStorage(const ComponentType component, const std::vector<ComponentStorageLocator>& locators)
+	void AddComponentToNewStorage(ComponentType&& component, const std::vector<ComponentStorageLocator>& locators)
 	{
 		std::type_index type = typeid(ComponentType);
 		auto it = std::ranges::find(locators, type, &ComponentStorageLocator::ComponentType);
-		WorldComponentManager->CreateNewComponentToStorage(*it, component);
+		WorldComponentManager->CreateNewComponentToStorage(*it, std::forward<decltype(std::move(component))>(std::move(component)));
 	}
 
 
@@ -844,24 +803,25 @@ protected:
 
 	EntityTypeStorage* GetStorageByEntity(Entity entity)
 	{
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
+		EntityType entityType = GetEntityType(entity);
+		if(entityType == -1)
 		{
 			fmt::println("ERROR: Entity with ID {} was not found", entity);
 			return {};
 		}
-		const auto storageIt = EntityStorages.find(entityType->second);
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
-			fmt::println("ERROR: Entity {} has invalid type in EntityTypeMap: {}", entity, entityType->second);
+			fmt::println("ERROR: Entity {} has invalid type in EntityTypeMap: {}", entity, entityType);
 			return {};
 		}
 		return storageIt->second.get();
 	}
 
-	EntityTypeStorage* GetStorageByEntityType(EntityType entityType)
+	EntityTypeStorage* GetStorageByEntityType(const EntityType entityType) const
 	{
-		auto const& storageIt = EntityStorages.find(entityType);
+
+		auto const storageIt = std::ranges::find(EntityStorages, entityType, &std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>::first);
 		if (storageIt == EntityStorages.end())
 		{
 			fmt::println("ERROR: Type not found from EntityTypeMap: {}", entityType);
@@ -871,17 +831,17 @@ protected:
 	}
 
 	template<typename ComponentType>
-	void CreateEntityComponent(EntityTypeStorage* storage, const ComponentType component)
+	void CreateEntityComponent(EntityTypeStorage* storage, ComponentType&& component)
 	{
-		auto componentStorageLocator = storage->GetComponentStorageLocator<ComponentType>();
-		WorldComponentManager->CreateNewComponentToStorage(componentStorageLocator, component);
+		auto componentStoragePointer = storage->GetComponentStoragePointer<ComponentType>();
+		WorldComponentManager->CreateNewComponentToStorage(componentStoragePointer, std::forward<decltype(std::move(component))>(std::move(component)));
 	}
 
 	template<typename ComponentType>
-	void ReplaceEntityComponent(EntityTypeStorage* storage, const EntityComponentIndex entityComponentIndex, const ComponentType component)
+	void ReplaceEntityComponent(EntityTypeStorage* storage, const EntityComponentIndex entityComponentIndex, ComponentType&& component)
 	{
-		auto componentStorageLocator = storage->GetComponentStorageLocator<ComponentType>();
-		WorldComponentManager->ReplaceComponentData(componentStorageLocator, entityComponentIndex);
+		auto componentStoragePointer = storage->GetComponentStoragePointer<ComponentType>();
+		WorldComponentManager->ReplaceComponentData(componentStoragePointer, entityComponentIndex, std::forward<decltype(std::move(component))>(std::move(component)));
 	}
 
 	template<typename ComponentType>
@@ -898,28 +858,46 @@ protected:
 		EntityType newTypeID = EntityTypesCreated++;
 		auto newStorage = std::make_unique<EntityTypeStorage>(newTypeID);
 		EntityTypeNames.insert(std::pair(newTypeID, entityTypeName));
-		const auto storageIt = EntityStorages.insert(std::pair(newTypeID, std::move(newStorage)));
+		EntityStorages.emplace_back(std::pair(newTypeID, std::move(newStorage)));
+		WorldSharedBetweenManagers->AddEntityStorageMutex(newTypeID);
 
 		CurrentWorldCompositionNumber_ = WorldSharedBetweenManagers->SignalCompositionChange();
-		return storageIt.first->second.get();
+		return EntityStorages.back().second.get();
 	}
 
-	EntityType GetEntityType(const Entity entity)
+	EntityType GetEntityType(const Entity entity) const
 	{
-		const auto entityType = EntityTypeMap.find(entity);
-		if (entityType == EntityTypeMap.end())
+		EntityType entityType = -1;
+		for (const auto& entityStorage : EntityStorages)
 		{
-			fmt::println("ERROR: Entity with ID {} was not found", entity);
-			return -1;
+			if (entityStorage.second.get()->ContainsEntity(entity))
+			{
+				entityType = entityStorage.second->GetStorageEntityType();
+				break;
+			}
 		}
-		return entityType->second;
+		return entityType;
 	}
 
+	EntityType GetEntityTypeThreaded(const Entity entity) const
+	{
+		EntityType entityType = -1;
+		for (const auto& entityStorage : EntityStorages)
+		{
+			entityType = entityStorage.second->GetStorageEntityType();
+			std::scoped_lock lock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType));
+			if (entityStorage.second.get()->ContainsEntity(entity))
+			{
+				break;
+			}
+		}
+		return entityType;
+	}
 
 	template<typename ComponentType>
 	static void AddTypeIndexToVector(std::vector<std::type_index>& indexVector)
 	{
-		indexVector.push_back(typeid(ComponentType));
+		indexVector.emplace_back(typeid(ComponentType));
 	}
 
 	template<typename...ComponentTypes>
@@ -931,7 +909,7 @@ protected:
 		return componentTypeIndexes;
 	}
 
-	EntityType FindEntityTypeWithComponents(const std::vector<std::type_index> &indexVector)
+	EntityType FindEntityTypeWithComponents(const std::vector<std::type_index>& indexVector)
 	{
 		const auto foundStorage = std::ranges::find_if(EntityStorages,[&indexVector](const auto& pair)
 		{
@@ -959,19 +937,16 @@ protected:
 
 private:
 
-	std::unordered_map<Entity, EntityType> EntityTypeMap;
 	std::map<EntityType, std::string> EntityTypeNames;
-	std::map<EntityType, std::unique_ptr<EntityTypeStorage>> EntityStorages;
-
+	std::vector<std::pair<EntityType, std::unique_ptr<EntityTypeStorage>>> EntityStorages;
 	SharedBetweenManagers* WorldSharedBetweenManagers;
 	ComponentManager* WorldComponentManager;
 
-	size_t EntitiesCreated = 0;
-	size_t CurrentEntityCount = 0;
+	std::mutex ThreadProtectionMutex;
+	std::atomic<size_t> EntitiesCreatedAtomic = 0;
+	std::atomic<size_t> CurrentEntityCountAtomic = 0;
 	size_t EntityTypesCreated = 0;
 
 	// Used mainly to signal other managers to rebuild critical structures
 	size_t CurrentWorldCompositionNumber_ = 0;
-
-	std::mutex DestructiveEditMutex;
 };

@@ -1,6 +1,6 @@
 # Specify minimum supported cmake version and set c++23
 cmake_minimum_required(VERSION 3.28)
-set (CMAKE_CXX_STANDARD    23    CACHE    STRING    "C++ Version"    FORCE)
+set (CMAKE_CXX_STANDARD    20    CACHE    STRING    "C++ Version"    FORCE)
 set (CXX_SCAN_FOR_MODULES    ON    CACHE    STRING    "Modules"    FORCE)
 
 # Compile static libraries using multithreading.
@@ -114,7 +114,7 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/WindowManager.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/MatrixCalculations.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/SetupCoreECS.ixx"
-
+	
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/TransformComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystemData.ixx"
@@ -214,8 +214,7 @@ set(MODELS_DIR "${PROJECT_SOURCE_DIR}/Resources/Models")
 set(SHADERS_DIR "${PROJECT_SOURCE_DIR}/Resources/Shaders")
 set(BUILD_RESOURCES_DIR "${CONFIGURATION_BINARY_DIR}/Engine/Resources")
 
-add_custom_command(
-TARGET EncosyEngine POST_BUILD
+add_custom_target(Engine_Build_Setup
 	COMMAND ${CMAKE_COMMAND} -E make_directory "${TEXTURES_DIR}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${MODELS_DIR}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_DIR}"
@@ -224,6 +223,7 @@ TARGET EncosyEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILD_RESOURCES_DIR}/Models"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILD_RESOURCES_DIR}/Shaders"
 )
+add_dependencies(EncosyEngine Engine_Build_Setup)
 
 # Shader building
 include("${PROJECT_SOURCE_DIR}/EngineShaderBuild.cmake")

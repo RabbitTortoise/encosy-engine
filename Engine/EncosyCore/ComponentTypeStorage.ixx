@@ -22,6 +22,7 @@ public:
 protected:
 	virtual bool RemoveComponent(const size_t index) = 0;
 	virtual bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) = 0;
+	virtual bool MoveComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) = 0;
 	virtual std::unique_ptr<IComponentStorage> InitializeSimilarStorage() = 0;
 	virtual void Reset() = 0;
 	virtual void AddComponentToStorage() = 0;
@@ -78,12 +79,23 @@ protected:
 		return false;
 	}
 
+	bool MoveComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) override
+	{
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(otherStorage);
+		if (id < GetComponentCount())
+		{
+			storage->AddComponentToStorage(std::move(Storage[id]));
+			return true;
+		}
+		return false;
+	}
+
 	bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) override
 	{
 		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(otherStorage);
 		if (id < GetComponentCount())
 		{
-			storage->AddComponentToStorage(Storage[id]);
+			storage->AddComponentCopyToStorage(Storage[id]);
 			return true;
 		}
 		return false;
@@ -102,7 +114,7 @@ protected:
 
 	void AddComponentToStorage() override
 	{
-		Storage.emplace_back(ComponentType());
+		Storage.emplace_back(std::move(ComponentType()));
 	}
 
 	/// <summary>
@@ -110,10 +122,14 @@ protected:
 	/// </summary>
 	/// <returns></returns>
 
-
-	void AddComponentToStorage(const ComponentType component)
+	void AddComponentCopyToStorage(const ComponentType component)
 	{
 		Storage.emplace_back(component);
+	}
+
+	void AddComponentToStorage(ComponentType&& component)
+	{
+		Storage.emplace_back(std::move(component));
 	}
 
 	ComponentType* GetWriteReadComponent(const size_t id)
@@ -134,9 +150,9 @@ protected:
 		return {};
 	}
 
-	void SetComponentData(const size_t index, const ComponentType component)
+	void SetComponentData(const size_t index, const ComponentType& component)
 	{
-		Storage[index] = component;
+		Storage[index] = std::move(component);
 	}
 
 	std::span<ComponentType const> GetStorageReadOnlySpan() const
@@ -185,9 +201,14 @@ public:
 
 protected:
 
-	void SetComponentData(const ComponentType component)
+	void SetComponentDataFromCopy(const ComponentType& component)
 	{
-		SystemDataComponent[0] = component;
+		SystemDataComponent[0] = std::move(component);
+	}
+
+	void SetComponentData(ComponentType&& component)
+	{
+		SystemDataComponent[0] = std::move(component);
 	}
 
 	std::span<ComponentType const> GetReadOnly()
@@ -210,7 +231,14 @@ protected:
 	bool CopyComponentToOtherStorage(const size_t id, IComponentStorage* otherStorage) override
 	{
 		auto storage = static_cast<SystemDataStorage<ComponentType>*>(otherStorage);
-		storage->SetComponentData(SystemDataComponent[0]);
+		storage->SetComponentDataFromCopy(SystemDataComponent[0]);
+		return true;
+
+	}
+	bool MoveComponentToOtherStorage(const size_t id, IComponentStorage * otherStorage) override
+	{
+		auto storage = static_cast<SystemDataStorage<ComponentType>*>(otherStorage);
+		storage->SetComponentData(std::move(SystemDataComponent[0]));
 		return true;
 	}
 

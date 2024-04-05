@@ -13,7 +13,7 @@ import EncosyEngine.Interface;
 
 enum class Scene { RotationTest = 0, StaticTest, CollisionDemo, DynamicDemo};
 
-Scene ChosenScene = Scene::RotationTest;
+Scene ChosenScene = Scene::DynamicDemo;
 bool Fullscreen = false;
 
 export
@@ -32,17 +32,17 @@ int main()
 
 	if(ChosenScene == Scene::RotationTest)
 	{
-		int testDimensionsX = 20;
-		int testDimensionsY = 20;
-		int testDimensionsZ = 20;
+		int testDimensionsX = 25;
+		int testDimensionsY = 25;
+		int testDimensionsZ = 25;
 
 		InitRotationTest(testDimensionsX, testDimensionsY, testDimensionsZ);
 	}
 	if (ChosenScene == Scene::StaticTest)
 	{
-		int testDimensionsX = 20;
-		int testDimensionsY = 20;
-		int testDimensionsZ = 20;
+		int testDimensionsX = 25;
+		int testDimensionsY = 25;
+		int testDimensionsZ = 25;
 
 		InitStaticTest(testDimensionsX, testDimensionsY, testDimensionsZ);
 	}
@@ -58,7 +58,7 @@ int main()
 		glm::vec3 playnRegionMax = { 100, 70, -50 };
 		InitDynamicDemo(playRegionMin, playnRegionMax);
 	}
-
+	
 	EncosyEngine::StartEngineLoop();
 	fmt::println("Stopping EncosyGame process");
 	return 0;

@@ -114,7 +114,7 @@ protected:
 			newtc.Position.z += direction.z / 10.0f;
 			newtc.Scale = glm::vec3(Scale, Scale, Scale);
 
-			MaterialComponentLit newmat = { lmc.Diffuse, lmc.Normal, MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere), lmc.TextureRepeat };
+			MaterialComponentLit newmat = { lmc.Diffuse, lmc.Normal, MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere), lmc.TextureRepeat, glm::vec3(1,1,1) };
 			ModelMatrixComponent newmatrix = {};
 			FollowerComponent newfc = { llc.LeaderID };
 			MovementComponent newmov = { {}, {Speed} };

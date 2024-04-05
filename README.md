@@ -1,15 +1,15 @@
 # Encosy-Engine
 
-This is the game engine I have been working on as part of my studies. I've used it to explore data oriented design and Entity-Component-System architechtural pattern. It is made using C++23 and uses Vulkan as the graphics API. It uses the modules introduced in C++20. This currently makes development harder, as Intellisense doesn't really want to co-operate with modules yet.  
-I'm currently working on implementing more Vulkan graphics features and a graphical demo as part of my last projects studies. As my thesis I'm researching how to add multithreading capabilities to the engine. Most of the multithreading capabilites for the thesis are in place. There may be some tweaks and performance updates coming. After my thesis is done I will add a special branch for the code used in thesis writing.  
+This is the game engine I have been working on as part of my studies. I've used it to explore data oriented design and Entity-Component-System architechtural pattern. It is made using C++20 and uses Vulkan as the graphics API. It uses the modules introduced in C++20. This currently makes development harder, as Intellisense doesn't really want to co-operate with modules yet.  
+I'm currently working on implementing more Vulkan graphics features and a graphical demo as part of my last projects studies. As my thesis I'm researching how to add multithreading capabilities to the engine. Most of the multithreading capabilites are in place. There may be some tweaks and performance updates coming. After my thesis is done I will add a special branch for the code used in the thesis.
 
-YouTube-playlist showcasing the project:  
+YouTube-playlist showcasing the project:
 https://www.youtube.com/playlist?list=PL7UiajzfESH9aFZna6MW-wU_mE83rhjxj
 
 ## Getting started
 
 ### Requirements
-Due to usage of C++23 features, the project requires new tools to even compile.
+Due to usage of C++20 modules, the project requires new tools to even compile.
 
 1. Windows 10/11 
 2. Visual Studio 2022 (17.9.2 tested to work)

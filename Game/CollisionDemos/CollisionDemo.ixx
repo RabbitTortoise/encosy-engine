@@ -104,11 +104,11 @@ export void InitCollisionDemo(glm::vec3 playRegionMin, glm::vec3 playRegionMax)
 
 	for (size_t i = 0; i < 5; i++)
 	{
-		MaterialComponentLit mat1 = { grassID , grassNormalID, torus, 1.0f };
-		MaterialComponentLit mat2 = { rockID , rockNormalID, torus, 1.0f };
-		MaterialComponentLit mat3 = { sandID , sandNormalID, torus, 1.0f };
-		MaterialComponentLit mat4 = { snowID , snowNormalID, torus, 1.0f };
-		MaterialComponentLit mat5 = { waterID , waterNormalID, torus, 1.0f };
+		MaterialComponentLit mat1 = { grassID , grassNormalID, torus, 1.0f, glm::vec3(1,1,1)};
+		MaterialComponentLit mat2 = { rockID , rockNormalID, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentLit mat3 = { sandID , sandNormalID, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentLit mat4 = { snowID , snowNormalID, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentLit mat5 = { waterID , waterNormalID, torus, 1.0f, glm::vec3(1,1,1) };
 		LeaderComponent lc1 = { 1, {distrX(gen),distrY(gen),distrZ(gen) } };
 		LeaderComponent lc2 = { 2, {distrX(gen),distrY(gen),distrZ(gen) } };
 		LeaderComponent lc3 = { 3, {distrX(gen),distrY(gen),distrZ(gen) } };

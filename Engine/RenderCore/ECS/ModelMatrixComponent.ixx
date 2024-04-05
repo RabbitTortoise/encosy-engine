@@ -1,5 +1,5 @@
 module;
-#include <glm/glm.hpp>
+#include <glm/mat4x4.hpp>
 
 export module Components.ModelMatrixComponent;
 

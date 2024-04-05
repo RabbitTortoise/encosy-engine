@@ -137,7 +137,6 @@ public:
             }
             MainWindow.WindowWidth = width;
             MainWindow.WindowHeight = height;
-            fmt::println("Window created");
             return true;
         }
         fmt::println("WARNING: Window already exists! Multiple windows are not supported");

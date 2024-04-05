@@ -20,6 +20,7 @@ layout(set = 2, binding = 1) uniform sampler2D NormalTexture;
 
 // Texture Settings
 layout(set = 2, binding = 2) uniform TextureOptionsBuffer{   
+    vec3 Color;
     float TextureRepeat;
 } TextureOptions;
 
@@ -49,6 +50,9 @@ void main()
     vec3 ambientColor = ambientLight * diffuseColor;
     vec3 directionalColor = directionalLight * diffuseColor;
     vec3 color = ambientColor + directionalColor;
+    color.x = color.x * TextureOptions.Color.x;
+    color.y = color.y * TextureOptions.Color.y;
+    color.z = color.z * TextureOptions.Color.z;
 
-    outFragColor = vec4(color, 1.0);
+    outFragColor = vec4((color), 1.0);
 }

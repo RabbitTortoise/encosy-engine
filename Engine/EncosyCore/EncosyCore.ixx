@@ -17,6 +17,7 @@ import <vector>;
 
 export class EncosyCore
 {
+	friend class EncosyApplication;
 public:
 	EncosyCore() 
 	{ 
@@ -58,6 +59,12 @@ public:
 	EncosyWorld* GetPrimaryWorld() { return PrimaryWorld.get(); }
 
 private:
+
+	void Cleanup()
+	{
+		PrimaryWorldSystemManager->ForceStopTaskRunner();
+	}
+
 	std::vector<EntityOperationResult> EngineEntities;
 	std::unique_ptr<EncosyWorld> PrimaryWorld;
 	WindowManager* EngineWindowManager;

@@ -9,13 +9,13 @@ import EncosyCore.Entity;
 import EncosyCore.SystemThreaded;
 
 import Components.TransformComponent;
+import Components.MaterialComponent;
 import Demo.Components.DyingFollowerComponent;
 
 
 import <map>;
 import <span>;
 import <vector>;
-import <iostream>;
 
 
 
@@ -24,19 +24,31 @@ export class DyingFollowerSystem : public SystemThreaded
 
 	friend class SystemManager;
 
+	SystemThreadedOptions ThreadedRunOptions =
+	{
+	.PreferRunAlone = false,
+	.ThreadedUpdateCalls = false,
+	.AllowPotentiallyUnsafeEdits = false,
+	.AllowDestructiveEditsInThreads = false,
+	.IgnoreThreadSaveFunctions = false,
+	};
+
 public:
 	DyingFollowerSystem() {}
 	~DyingFollowerSystem() {}
 
 protected:
+
 	void Init() override
 	{
 		Type = SystemType::System;
 		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
+		SetThreadedRunOptions(ThreadedRunOptions);
 
 		AddComponentQueryForWriting(&TransformComponents, &ThreadTransformComponentComponents);
 		AddComponentQueryForWriting(&DyingFollowerComponents, &ThreadDyingFollowerComponents);
 	}
+
 	void PreUpdate(const int thread, const double deltaTime) override {}
 	void Update(const int thread, const double deltaTime) override {	}
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
@@ -50,7 +62,7 @@ protected:
 			return;
 		}
 
-		float change = deltaTime * 1.0f;
+		float change = deltaTime * 0.5f;
 		if (dc.TimeToLive < 2)
 		{
 			change *= (-2.5f);

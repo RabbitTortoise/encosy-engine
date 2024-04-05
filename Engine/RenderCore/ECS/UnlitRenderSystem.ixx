@@ -87,7 +87,8 @@ protected:
 
 		TextureOptions textureOptions =
 		{
-			.textureRepeat = materialComponent.TextureRepeat
+			.color = glm::vec3(1,1,1),
+			.textureRepeat = materialComponent.TextureRepeat,
 		};
 
 		RenderPipeline UsedPipeline = MainRenderPipelineManager->GetEngineRenderPipeline(EngineRenderPipelines::Unlit);

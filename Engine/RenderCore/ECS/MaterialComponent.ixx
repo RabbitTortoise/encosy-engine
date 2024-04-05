@@ -1,5 +1,6 @@
 module;
 #include <glm/gtc/quaternion.hpp>
+#include <glm/vec3.hpp>
 
 export module Components.MaterialComponent;
 
@@ -18,6 +19,7 @@ export struct MaterialComponentLit
 	TextureID Normal;
 	MeshID RenderMesh;
 	float TextureRepeat;
+	glm::vec3 Color = glm::vec3(1,1,1);
 };
 
 export struct MaterialComponentPBR

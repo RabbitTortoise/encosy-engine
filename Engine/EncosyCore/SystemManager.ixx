@@ -14,6 +14,7 @@ import EncosyCore.ComponentManager;
 import EncosyCore.ThreadedTaskRunner;
 
 import <map>;
+import <set>;
 import <vector>;
 import <list>;
 import <memory>;
@@ -59,8 +60,7 @@ public:
 		system->ID = id;
 		system->WorldComponentManager = WorldComponentManager;
 		system->WorldEntityManager = WorldEntityManager;
-		system->ThreadRunner = &ThreadRunner;
-		system->MainThreadID = MainThreadID;
+		system->MainThreadID = MainThreadID; 
 		InitSystem(system.get(), systemName);
 
 		ThreadingProtectionChecks(system.get(), systemName);
@@ -91,6 +91,8 @@ public:
 	void InitSystem(T* system, std::string systemName)
 	{
 		fmt::println("Initializing threaded system {}", systemName);
+		system->ThreadRunner = &ThreadRunner;
+		system->ThreadPerEntityRunner = &ThreadPerEntityRunner;
 		system->ThreadCount = GetThreadCount();
 		system->RuntimeThreadInfo = std::vector<SystemThreadInfo>(system->ThreadCount, SystemThreadInfo());
 		system->SystemInit();
@@ -141,7 +143,7 @@ public:
 
 		system->UpdateMatchingEntityTypes();
 		system->FetchRequiredSpans();
-		
+
 		std::unordered_set<std::type_index> wantedReadOnly = CompileWantedReadOnlyAccess(system);
 		std::unordered_set<std::type_index> wantedWriteRead = CompileWantedWriteReadAccess(system);
 
@@ -150,13 +152,13 @@ public:
 
 		if (!readOnlyIsEqual)
 		{
-			fmt::println("ERROR when creating {}: WantedReadOnlyComponentTypes is different compared to what the system accesses", systemName);
+			fmt::println("ERROR when creating {}: FetchedReadOnlyComponentTypes is different compared to what the system accesses", systemName);
 			fmt::println("{} != {}", GetSetAsString(wantedReadOnly), GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
 
 		}
 		if (!writeReadIsEqual)
 		{
-			fmt::println("ERROR when creating {}: WantedWriteReadComponentTypes is different compared to what the system accesses", systemName);
+			fmt::println("ERROR when creating {}: FetchedWriteReadComponentTypes is different compared to what the system accesses", systemName);
 			fmt::println("{} != {}", GetSetAsString(wantedWriteRead), GetSetAsString(WorldComponentManager->ThreadingProtectionReadOnlyComponentsAccessed));
 		}
 
@@ -174,7 +176,7 @@ public:
 	std::unordered_set<std::type_index> CompileWantedReadOnlyAccess(T* system)
 	{
 		std::unordered_set<std::type_index> wantedReadOnly;
-		auto readOnlySet = system->WantedReadOnlyComponentTypes;
+		auto readOnlySet = system->FetchedReadOnlyComponentTypes;
 		wantedReadOnly.insert(readOnlySet.begin(), readOnlySet.end());
 		readOnlySet = system->ReadOnlySystemData;
 		wantedReadOnly.insert(readOnlySet.begin(), readOnlySet.end());
@@ -189,7 +191,7 @@ public:
 	std::unordered_set<std::type_index> CompileWantedWriteReadAccess(T* system)
 	{
 		std::unordered_set<std::type_index> wantedWriteRead;
-		auto writeReadSet = system->WantedWriteReadComponentTypes;
+		auto writeReadSet = system->FetchedWriteReadComponentTypes;
 		wantedWriteRead.insert(writeReadSet.begin(), writeReadSet.end());
 		writeReadSet = system->WriteReadSystemData;
 		wantedWriteRead.insert(writeReadSet.begin(), writeReadSet.end());
@@ -280,29 +282,9 @@ protected:
 
 	void UpdatePhysicsSystems(const double deltaTime)
 	{
-		// Will be converted to execute system batches in the future
 		for (const auto& systemRunBatch : PhysicsSystemBatches)
 		{
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPreUpdate(deltaTime);
-			}
-			ThreadRunner.RunAllTasks();
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemUpdate();
-			}
-			ThreadRunner.RunAllTasks();
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPerEntityUpdate();
-			}
-			ThreadRunner.RunAllTasks();
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPostUpdate();
-			}
-			ThreadRunner.RunAllTasks();
+			UpdateSystemBatch(deltaTime, systemRunBatch);
 		}
 	}
 
@@ -310,58 +292,45 @@ protected:
 	{
 		for (const auto& systemRunBatch : RegularSystemBatches)
 		{
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPreUpdate(deltaTime);
-			}
-			ThreadRunner.RunAllTasks();
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemUpdate();
-			}
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPerEntityUpdate();
-			}
-			ThreadRunner.RunAllTasks();
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPostUpdate();
-			}
-			ThreadRunner.RunAllTasks();
+			UpdateSystemBatch(deltaTime, systemRunBatch);
 		}
 	}
 
 	void UpdateRenderSystems(const double deltaTime)
 	{
-		// Will be converted to execute system batches in the future
 		for (const auto& systemRunBatch : RenderSystemBatches)
 		{
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPreUpdate(deltaTime);
-			}
-			ThreadRunner.RunAllTasks();
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemUpdate();
-			}
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPerEntityUpdate();
-			}
-			ThreadRunner.RunAllTasks();
-			for (const auto& systemId : systemRunBatch)
-			{
-				Systems[systemId]->SystemPostUpdate();
-			}
-			ThreadRunner.RunAllTasks();
+			UpdateSystemBatch(deltaTime, systemRunBatch);
 		}
+	}
+
+	void UpdateSystemBatch(const double deltaTime, const auto& systemRunBatch)
+	{
+		for (const auto& systemId : systemRunBatch)
+		{
+			Systems[systemId]->SystemPreUpdate(deltaTime);
+		}
+		ThreadRunner.RunAllTasks();
+		for (const auto& systemId : systemRunBatch)
+		{
+			Systems[systemId]->SystemUpdate();
+		}
+		ThreadRunner.RunAllTasks();
+		for (const auto& systemId : systemRunBatch)
+		{
+			Systems[systemId]->SystemPerEntityUpdate();
+		}
+		ThreadPerEntityRunner.RunAllTasks();
+		for (const auto& systemId : systemRunBatch)
+		{
+			Systems[systemId]->SystemPostUpdate();
+		}
+		ThreadRunner.RunAllTasks();
 	}
 
 	void ManagerUpdate()
 	{
-		if (!WorldSharedBetweenManagers->IsCurrentComposition(CurrentWorldCompositionNumber_)) 
+		if (!WorldSharedBetweenManagers->IsCurrentComposition(CurrentWorldCompositionNumber_))
 		{
 			ExecutionOrderRecalculationNeeded_ = true;
 			CurrentWorldCompositionNumber_ = WorldSharedBetweenManagers->GetCurrentComposition();
@@ -369,16 +338,21 @@ protected:
 
 		if (ExecutionOrderRecalculationNeeded_)
 		{
-			fmt::println("Rebuilding system execute order batches");
+			fmt::println("Rebuilding system execute order batches:");
 			PhysicsSystemBatches = ReorderSystems(SystemType::PhysicsSystem);
 			RegularSystemBatches = ReorderSystems(SystemType::System);
 			RenderSystemBatches = ReorderSystems(SystemType::RenderSystem);
-			fmt::println("PhysicsSystemBatches:");
-			BatchSystemNamesPrint(PhysicsSystemBatches);
-			fmt::println("RegularSystemBatches:");
-			BatchSystemNamesPrint(RegularSystemBatches);
-			fmt::println("RenderSystemBatches:");
-			BatchSystemNamesPrint(RenderSystemBatches);
+
+			std::string names = CompilePhysicsBatchNames(PhysicsSystemBatches);
+			fmt::println("PhysicsSystemBatches:\n{}", names);
+
+			names = CompileSystemBatchNames(RegularSystemBatches);
+			fmt::println("RegularSystemBatches:\n{}", names);
+
+			names = CompileRenderBatchNames(RenderSystemBatches);
+			fmt::println("RenderSystemBatches:\n{}", names);
+
+
 			ExecutionOrderRecalculationNeeded_ = false;
 		}
 	}
@@ -389,35 +363,46 @@ protected:
 
 		for (int syncPoint = static_cast<int>(SystemSyncPoint::First); syncPoint < static_cast<int>(SystemSyncPoint::Last); syncPoint++)
 		{
-			std::list<SystemDependencies> allDependencies;
-			
+
+			std::list<SystemDependencies> dependencies;
 			// Add all systems with correct type for handling
 			for (auto& system : Systems)
 			{
 				auto systemPtr = system.get();
 				if (systemPtr->GetType() != systemType) { continue; }
 				if (static_cast<int>(systemPtr->RunSyncPoint) != syncPoint) { continue; }
-				allDependencies.push_back({ systemPtr->GetID(), std::vector<SystemID> ()});
+				dependencies.push_back({ systemPtr->GetID(),GetSystemNameById(systemPtr->GetID()), std::set<SystemID>() });
 			}
 
 			// Sum up all dependencies by after which system each system wants to run
-			for (auto& system : Systems)
+			for (auto& systemDeps : dependencies)
 			{
-				auto systemPtr = system.get();
+				auto systemPtr = Systems[systemDeps.system].get();
 				if (systemPtr->GetType() != systemType) { continue; }
 				if (static_cast<int>(systemPtr->RunSyncPoint) != syncPoint) { continue; }
 
 				if (systemPtr->RunAfterSpecificSystem != "")
 				{
 					auto afterDependency = SystemNames.find(systemPtr->RunAfterSpecificSystem);
-					if(afterDependency == SystemNames.end())
+					if (afterDependency == SystemNames.end())
 					{
 						fmt::println("ERROR: System {} has invalid RunAfterSpecificSystem: {}", GetSystemNameById(systemPtr->GetID()), systemPtr->RunAfterSpecificSystem);
 					}
 					SystemID afterSystem = afterDependency->second;
-					auto& dependenciesList = *std::ranges::find(allDependencies, systemPtr->GetID(), &SystemDependencies::system);
-					dependenciesList.runAfter.push_back(afterSystem);
+					auto& dependenciesList = *std::ranges::find(dependencies, systemPtr->GetID(), &SystemDependencies::system);
+					dependenciesList.runAfter.insert(afterSystem);
 				}
+			}
+
+			std::list<SystemDependencies> runOrder = dependencies;
+
+			// Sum up all dependencies by before which system each system wants to run
+			for (auto& systemDeps : dependencies)
+			{
+				auto systemPtr = Systems[systemDeps.system].get();
+				if (systemPtr->GetType() != systemType) { continue; }
+				if (static_cast<int>(systemPtr->RunSyncPoint) != syncPoint) { continue; }
+
 				if (systemPtr->RunBeforeSpecificSystem != "")
 				{
 					auto beforeDependency = SystemNames.find(systemPtr->RunBeforeSpecificSystem);
@@ -426,20 +411,58 @@ protected:
 						fmt::println("ERROR: System {} has invalid RunBeforeSpecificSystem: {}", GetSystemNameById(systemPtr->GetID()), systemPtr->RunBeforeSpecificSystem);
 					}
 					SystemID beforeSystem = beforeDependency->second;
-					auto& dependenciesList = *std::ranges::find(allDependencies, beforeSystem, &SystemDependencies::system);
-					for (auto dependency : dependenciesList.runAfter)
+					auto it = std::ranges::find(dependencies, beforeSystem, &SystemDependencies::system);
+					if (it == dependencies.end())
 					{
-						auto& subDependency = *std::ranges::find(allDependencies, dependency, &SystemDependencies::system);
-						subDependency.runAfter.push_back(systemPtr->GetID());
+						fmt::println("ERROR: Could not find dependency {} from dependencies-list when calculating dependencies for {}. Check that they have the same system type.", GetSystemNameById(beforeSystem), GetSystemNameById(systemPtr->GetID()));
 					}
-					dependenciesList.runAfter.push_back(systemPtr->GetID());
+
+					auto& dependencyList = *std::ranges::find(runOrder, beforeSystem, &SystemDependencies::system);
+					dependencyList.runAfter.insert(systemPtr->GetID());
 				}
 			}
 
-			// Check for cyclic dependencies
-			for (const auto& first : allDependencies)
+			// If a system wants to be executed with some system, it has to have same after dependencies.
+			// Adjust dependencies until systems that want to be run together have the same dependencies.
+			bool depsCorrected = true;
+			while (depsCorrected)
 			{
-				for (const auto& second : allDependencies)
+				depsCorrected = false;
+				for (auto& systemDeps : runOrder)
+				{
+					auto systemPtr = Systems[systemDeps.system].get();
+					if (systemPtr->GetType() != systemType) { continue; }
+					if (static_cast<int>(systemPtr->RunSyncPoint) != syncPoint) { continue; }
+
+					if (systemPtr->RunWithSpecificSystem != "")
+					{
+						auto withDependency = SystemNames.find(systemPtr->RunWithSpecificSystem);
+						if (withDependency == SystemNames.end())
+						{
+							fmt::println("ERROR: System {} has invalid RunWithSpecificSystem: {}", GetSystemNameById(systemPtr->GetID()), systemPtr->RunWithSpecificSystem);
+						}
+						SystemID withSystem = withDependency->second;
+						auto it = std::ranges::find(runOrder, withSystem, &SystemDependencies::system);
+						if (it == runOrder.end())
+						{
+							fmt::println("ERROR: Could not find dependency {} from runOrder-list when calculating dependencies for {}. Check that they have the same system type.", GetSystemNameById(withSystem), GetSystemNameById(systemPtr->GetID()));
+						}
+
+						if ((*it).runAfter != systemDeps.runAfter)
+						{
+							(*it).runAfter.merge(systemDeps.runAfter);
+							systemDeps.runAfter = (*it).runAfter;
+							depsCorrected = true;
+						}
+					}
+				}
+			}
+
+
+			// Check for cyclic dependencies
+			for (const auto& first : runOrder)
+			{
+				for (const auto& second : runOrder)
 				{
 					if (first.system == second.system) { continue; }
 					auto asDependecyToSecond = std::ranges::find(second.runAfter, first.system);
@@ -453,9 +476,9 @@ protected:
 			}
 
 			// Sort based on who has the most dependencies
-			allDependencies.sort([](const auto& A, const auto& B)
+			runOrder.sort([](const auto& A, const auto& B)
 				{
-					return A.runAfter.size() > B.runAfter.size();
+					return A.runAfter.size() < B.runAfter.size();
 				});
 
 			// Sort until all systems have an order where they are executed after the systems that depend on them
@@ -463,49 +486,58 @@ protected:
 			while (sorting)
 			{
 				sorting = false;
-				for (auto firstit = allDependencies.begin(); firstit != allDependencies.end(); firstit++)
+				for (auto firstIt = runOrder.begin(); firstIt != runOrder.end(); firstIt++)
 				{
-					auto secondIt = allDependencies.begin();
-					bool nextToRequired = true;
-					while (secondIt != allDependencies.end())
+					if (firstIt->runAfter.size() == 0)
 					{
-						if(firstit->system == secondIt->system) { nextToRequired = true; }
+						continue;
+					}
+					auto secondIt = runOrder.begin();
+					bool afterRequired = false;
+					bool selfFound = false;
+					while (secondIt != runOrder.end())
+					{
+						if (firstIt->system == secondIt->system) { selfFound = true; }
 						auto sameDep = std::ranges::find_if(secondIt->runAfter, [&](const auto v) {
-							return(std::ranges::find(firstit->runAfter, v) != firstit->runAfter.end());
-						});
+							return(std::ranges::find(firstIt->runAfter, v) != firstIt->runAfter.end());
+							});
 						if (sameDep != secondIt->runAfter.end())
 						{
 							secondIt++;
 							continue;
 						}
-						auto runAfter = std::ranges::find(firstit->runAfter, secondIt->system);
-						if (runAfter != firstit->runAfter.end())
+						//Check if current system is a dependency for the looped system
+						bool foundRunAfter = std::ranges::find(firstIt->runAfter, secondIt->system) != firstIt->runAfter.end();
+
+						if (foundRunAfter && selfFound)
 						{
-							if (!nextToRequired)
-							{
-								allDependencies.splice(secondIt, allDependencies, firstit);
-								sorting = true;
-							}
-							secondIt++;
-							continue;
+							runOrder.splice(firstIt, runOrder, secondIt);
+							afterRequired = true;
+							sorting = true;
 						}
-						nextToRequired = false;
+						else if (foundRunAfter && !selfFound)
+						{
+							afterRequired = true;
+						}
+
 						secondIt++;
 					}
 				}
 			}
 
-
+			// Create runtime batches from entities based on their component accesses and run order.
 			std::vector<SystemID> systemBatch;
 			std::unordered_set<std::type_index> batchComponentAccess;
 			std::unordered_set<EntityType> batchEntityAccess;
+			std::unordered_set<std::type_index> accessedComponentStorages;
 			std::unordered_set<std::type_index> batchStorageAccess;
-			for (auto itCurrent = allDependencies.rbegin(); itCurrent != allDependencies.rend(); itCurrent++)
+			for (auto itCurrent = runOrder.begin(); itCurrent != runOrder.end(); itCurrent++)
 			{
 				systemBatch.push_back(itCurrent->system);
+				// Record all component and entity types the system modifies.
 				batchComponentAccess.merge(Systems[itCurrent->system]->GetAllAccessedEntityComponents());
 				batchEntityAccess.merge(Systems[itCurrent->system]->GetAllAccessedEntityTypes());
-				auto accessedComponentStorages = Systems[itCurrent->system]->GetAllAccessedComponentStorages();
+				accessedComponentStorages = Systems[itCurrent->system]->GetAllAccessedComponentStorages();
 				for (const auto& access : accessedComponentStorages)
 				{
 					auto entityTypes = WorldEntityManager->GetEntityTypesWithComponent(access);
@@ -519,7 +551,7 @@ protected:
 				itNext++;
 
 				// If we are at the end of system list, end this batch.
-				if (itNext == allDependencies.rend())
+				if (itNext == runOrder.end())
 				{
 					systemBatches.push_back(systemBatch);
 					break;
@@ -582,9 +614,9 @@ protected:
 				for (const auto& access : nextStorageAccess)
 				{
 					auto entityTypes = WorldEntityManager->GetEntityTypesWithComponent(access);
-					for(const auto entityType : entityTypes)
+					for (const auto entityType : entityTypes)
 					{
-						if(batchEntityAccess.contains(entityType))
+						if (batchEntityAccess.contains(entityType))
 						{
 							collisionFound = true;
 							break;
@@ -649,12 +681,18 @@ protected:
 		}
 	}
 
+	void ForceStopTaskRunner()
+	{
+		ThreadRunner.ForceStopTaskRunner();
+	}
+
 private:
 
 	struct SystemDependencies
 	{
 		SystemID system;
-		std::vector<SystemID> runAfter;
+		std::string systemName;
+		std::set<SystemID> runAfter;
 	};
 
 
@@ -669,19 +707,38 @@ private:
 		return s;
 	}
 
-	void BatchSystemNamesPrint(std::vector<std::vector<SystemID>> batch)
+	std::string CompileBatchNames(std::vector<std::string>& target, std::vector<std::vector<SystemID>> batch)
 	{
+		std::string printNames = "";
+		std::string batchNames = "";
 		for (const auto& vec : batch)
 		{
-			fmt::print("[");
-			for(const auto& id : vec)
+			batchNames = "[";
+			for (const auto& id : vec)
 			{
-				fmt::print("{},", this->GetSystemNameById(id));
-
+				batchNames += "'";
+				std::string systemName = GetSystemNameById(id);
+				batchNames += systemName + "'";
 			}
-			fmt::print("],");
+			batchNames += "]";
+			printNames += batchNames;
+			target.push_back(batchNames);
+			printNames += "\n";
 		}
-		fmt::println("");
+		return printNames;
+	}
+
+	std::string CompilePhysicsBatchNames(std::vector<std::vector<SystemID>> batch)
+	{
+		return CompileBatchNames(PhysicsSystemBatchNames, batch);
+	}
+	std::string CompileSystemBatchNames(std::vector<std::vector<SystemID>> batch)
+	{
+		return CompileBatchNames(RegularSystemBatchesNames, batch);
+	}
+	std::string CompileRenderBatchNames(std::vector<std::vector<SystemID>> batch)
+	{
+		return CompileBatchNames(RenderSystemBatchNames, batch);
 	}
 
 	bool ExecutionOrderRecalculationNeeded_ = false;
@@ -694,13 +751,18 @@ private:
 	std::map<std::type_index, SystemID> SystemIDs;
 
 	std::vector<std::vector<SystemID>> PhysicsSystemBatches;
+	std::vector<std::string> PhysicsSystemBatchNames;
 	std::vector<std::vector<SystemID>> RegularSystemBatches;
+	std::vector<std::string> RegularSystemBatchesNames;
 	std::vector<std::vector<SystemID>> RenderSystemBatches;
+	std::vector<std::string> RenderSystemBatchNames;
 
 	// System threading
 	ThreadedTaskRunner ThreadRunner;
+	ThreadedPerEntityTaskRunner ThreadPerEntityRunner;
 	std::thread::id MainThreadID;
 
 	// Used mainly to signal other managers to rebuild critical structures
 	size_t CurrentWorldCompositionNumber_ = 0;
 };
+

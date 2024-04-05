@@ -51,8 +51,8 @@ export class LitRenderSystem : public SystemThreaded
 	.PreferRunAlone = true,
 	.ThreadedUpdateCalls = false,
 	.AllowPotentiallyUnsafeEdits = false,
-	.AllowDestructiveEditsInThreads = true,
-	.IgnoreThreadSaveFunctions = true,
+	.AllowDestructiveEditsInThreads = false,
+	.IgnoreThreadSaveFunctions = false,
 	};
 
 public:
@@ -89,6 +89,7 @@ protected:
 		InstanceThreadVectors = std::vector<std::vector<InstanceProperties>>(GetThreadCount(), std::vector<InstanceProperties>());
 		ThreadData = std::vector<ThreadInstanceCalculationData>(GetThreadCount(), ThreadInstanceCalculationData());
 
+		AddCustomSaveFunction(std::bind_front(&LitRenderSystem::ComposeInstances, this));
 	};
 
 	void PreUpdate(const int thread, const double deltaTime) override
@@ -124,19 +125,14 @@ protected:
 
 	void Update(const int thread, const double deltaTime) override
 	{
-		if (thread != 0) { return; }
-
 		CameraControllerSystemData csData = GetSystemData(&CameraSystemDataStorage);
 		CurrentCameraComponent = GetEntityComponent(csData.MainCamera, CameraEntityType, &CameraEntityComponents);
 
 		// Compose instances after all entities have been processed.
-		AddCustomSaveFunction(std::bind_front(&LitRenderSystem::ComposeInstances, this));
-
 	};
 
 	void PostUpdate(const int thread, const double deltaTime) override
 	{
-		if (thread != 0) { return; }
 		RenderInstanced();
 	};
 
@@ -184,7 +180,7 @@ protected:
 		if (correctInstance == -1)
 		{
 			threadInstance.emplace_back(InstanceProperties(mc, {}));
-			previousInstanceIndex += 1;
+			previousInstanceIndex = threadInstance.size() -1;
 			threadInstance[previousInstanceIndex].ModelMatrices.emplace_back(modelMatrix);
 			previousInstanceIndex = previousInstanceIndex;
 			return;
@@ -263,7 +259,8 @@ protected:
 
 			TextureOptions textureOptions =
 			{
-				.textureRepeat = materialComponent.TextureRepeat
+				.color = materialComponent.Color,
+				.textureRepeat = materialComponent.TextureRepeat,
 			};
 
 			auto meshData = MainMeshLoader->GetMeshData(materialComponent.RenderMesh);
@@ -383,6 +380,7 @@ protected:
 		if (c1.Normal != c1.Normal) { return false; }
 		if (c1.RenderMesh != c2.RenderMesh) { return false; }
 		if (c1.TextureRepeat != c2.TextureRepeat) { return false; }
+		if (c1.Color != c2.Color) { return false; }
 
 		return true;
 	}

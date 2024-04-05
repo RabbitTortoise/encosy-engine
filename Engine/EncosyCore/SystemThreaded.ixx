@@ -25,6 +25,7 @@ import <functional>;
 import <typeindex>;
 import <typeinfo>;
 import <mutex>;
+import <utility>;
 
 
 struct DataOffsets
@@ -65,19 +66,20 @@ export class SystemThreaded : public SystemBase
 public:
 	SystemThreaded()
 	{
+		RunAlone = false;
 	}
-	~SystemThreaded()
+	~SystemThreaded() override
 	{
 	}
 
 protected:
 
-	virtual void Init() {}
+	//virtual void Init() {} //SystemBase
 	virtual void PreUpdate(int thread, const double deltaTime) = 0;
 	virtual void Update(int thread, const double deltaTime) = 0;
 	virtual void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) = 0;
 	virtual void PostUpdate(int thread, const double deltaTime) = 0;
-	virtual void Destroy() = 0;
+	//virtual void Destroy() = 0; //SystemBase
 
 	void SetThreadedRunOptions(SystemThreadedOptions options)
 	{
@@ -124,16 +126,16 @@ protected:
 	}
 
 	template <typename ComponentType>
-	ComponentType GetCurrentEntityComponent(int thread, ReadOnlyComponentStorage<ComponentType>* storage)
+	ComponentType GetCurrentEntityComponent(const int thread, ReadOnlyComponentStorage<ComponentType>* storage)
 	{
-		auto& info = RuntimeThreadInfo[thread];
+		const auto& info = RuntimeThreadInfo[thread];
 		return storage->Storage[info.outerIndex][info.innerIndexRead];
 	}
 
 	template <typename ComponentType>
-	ComponentType& GetCurrentEntityComponent(int thread, ThreadComponentStorage<ComponentType>* storage)
+	ComponentType& GetCurrentEntityComponent(const int thread, ThreadComponentStorage<ComponentType>* storage)
 	{
-		auto& info = RuntimeThreadInfo[thread];
+		const auto& info = RuntimeThreadInfo[thread];
 		return storage->Storage[thread][info.outerIndex][info.innerIndexWrite];
 	}
 
@@ -146,17 +148,17 @@ protected:
 	template <typename ComponentType>
 	ComponentType GetEntityComponent(Entity entity, EntityType entityType, ReadOnlyAlwaysFetchedStorage<ComponentType>* storage)
 	{
-		size_t index = WorldEntityManager->GetEntityComponentIndex(entity, entityType);
+		const size_t index = WorldEntityManager->GetEntityComponentIndex(entity, entityType);
 		return storage->Storage[index];
 	}
 
-	void AddCustomSaveFunction(std::function<void()>&& saveFunction) const
+	void AddCustomSaveFunction(std::function<void()>&& saveFunction)
 	{
-		ThreadRunner->AddSaveTask(saveFunction);
+		ThreadSaveFunctions.emplace_back(saveFunction);
 	}
 
 	template<typename ComponentType>
-	ComponentType GetReadOnlyComponentFromEntity(Entity entity)
+	ComponentType GetReadOnlyComponentFromEntity(const Entity entity)
 	{
 		return WorldEntityManager->GetReadOnlyComponentFromEntityThreaded<ComponentType>(entity);
 	}
@@ -173,51 +175,73 @@ protected:
 	}
 
 	template<typename...ComponentTypes>
-	Entity CreateEntityWithData(const EntityType entityType, const ComponentTypes... components)
+	Entity CreateEntityWithData(const EntityType entityType, ComponentTypes&&... components)
 	{
 		if (!CheckRuntimeModificationsAllowed()) 
 		{ 
 			fmt::println("ERROR: Can't use CreateEntityWithData with current system options.");
 			return -1; 
 		}
-		return WorldEntityManager->CreateEntityWithDataThreaded(entityType, DestructiveEntityStorageAccess, components...);
+		if (!DestructiveEntityStorageAccess.contains(entityType))
+		{
+			fmt::println("ERROR: CreateEntityWithDataThreaded(): System does not have destructive access to entity type {}", entityType);
+			return false;
+		}
+		
+		return WorldEntityManager->CreateEntityWithDataThreaded(entityType, std::forward<decltype(std::move(components))>(std::move(components))...);
 	}
-
-	bool DeleteEntity(const Entity entity)
+	
+	bool DeleteEntity(const Entity entity, const EntityType entityType)
 	{
 		if (!CheckRuntimeModificationsAllowed())
 		{
 			fmt::println("ERROR: Can't use DeleteEntity with current system options."); 
 			return false;
 		}
-		return WorldEntityManager->DeleteEntityThreaded(entity, DestructiveEntityStorageAccess);
+
+		if (!DestructiveEntityStorageAccess.contains(entityType))
+		{
+			fmt::println("ERROR: DeleteEntityThreaded(): System does have destructive acccess to entity type {}", entity, entityType);
+			return false;
+		}
+
+		return WorldEntityManager->DeleteEntityThreaded(entity, entityType);
 	}
 
 	template<typename... DeleteComponentTypes, typename... NewComponentTypes>
-	bool ModifyEntityComponents(const Entity entity, const EntityType entityType, NewComponentTypes... newComponents)
+	bool ModifyEntityComponents(const Entity entity, const EntityType entityType, const EntityType newEntityType, NewComponentTypes&&... newComponents)
 	{
 		if (!CheckRuntimeModificationsAllowed())
 		{
 			fmt::println("ERROR: Can't use DeleteEntity with current system options.");  
 			return false; 
 		}
-
-		EntityType newType = WorldEntityManager->ModifyEntityComponentsThreaded<DeleteComponentTypes...>(entity, entityType, DestructiveEntityStorageAccess, newComponents...);
-		return newType;
+		if (!DestructiveEntityStorageAccess.contains(entityType))
+		{
+			fmt::println("ERROR: ModifyEntityComponentsThreaded(): System doen not have access to modify entity type {}", entityType);
+			return false;
+		}
+		if (!DestructiveEntityStorageAccess.contains(newEntityType))
+		{
+			fmt::println("ERROR: ModifyEntityComponentsThreaded(): System doen not have access to modify entity type {}", newEntityType);
+			return false;
+		}
+		const auto success = WorldEntityManager->ModifyEntityComponentsThreaded<DeleteComponentTypes...>(entity, entityType, newEntityType, std::forward<decltype(std::move(newComponents))>(std::move(newComponents))...);
+		return success;
 	}
 
 	template<typename ComponentType>
-	void CreateNewComponentToStorage(const ComponentStorageLocator locator, const ComponentType component)
+	void CreateNewComponentToStorage(const ComponentStorageLocator& locator, ComponentType&& component)
 	{
 		if (!CheckRuntimeModificationsAllowed())
 		{
 			fmt::println("ERROR: Can't use CreateNewComponentToStorage with current system options."); 
 			return; 
 		}
-		WorldComponentManager->CreateNewComponentToStorageThreaded(locator, component);
+		WorldComponentManager->CreateNewComponentToStorageThreaded(locator, std::forward<decltype(std::move(component))>(std::move(component)));
 	}
 
-	void ResetComponentStorage(const ComponentStorageLocator locator) const
+	void ResetComponentStorage(const ComponentStorageLocator& locator) const
 	{
 		if (!CheckRuntimeModificationsAllowed())
 		{
@@ -265,11 +289,14 @@ private:
 			{
 				ThreadRunner->AddWorkTask(std::bind_front(&SystemThreaded::PreUpdate, this), thread, CurrentDeltaTime);
 			}
+			return;
 		}
-		else
+		else if (RunAlone)
 		{
 			PreUpdate(0, CurrentDeltaTime);
+			return;
 		}
+		ThreadRunner->AddWorkTask(std::bind_front(&SystemThreaded::PreUpdate, this), 0, CurrentDeltaTime);
 	}
 
 	void SystemUpdate() override
@@ -285,11 +312,14 @@ private:
 			{
 				ThreadRunner->AddWorkTask(std::bind_front(&SystemThreaded::Update, this), thread, CurrentDeltaTime);
 			}
+			return;
 		}
-		else
+		else if (RunAlone)
 		{
 			Update(0, CurrentDeltaTime);
+			return;
 		}
+		ThreadRunner->AddWorkTask(std::bind_front(&SystemThreaded::Update, this), 0, CurrentDeltaTime);
 	}
 
 	void SystemPerEntityUpdate() override
@@ -298,20 +328,20 @@ private:
 		{
 			for (const auto& copyFunction : ThreadCopyFunctions[thread])
 			{
-				ThreadRunner->AddCopyTask(copyFunction);
+				ThreadPerEntityRunner->AddCopyTask(copyFunction);
 			}
 
 			const auto& threadOffsets = ThreadDataOffsets[thread];
 			if (ThreadEntityInfo[thread].size() > 0)
 			{
-				ThreadRunner->AddWorkTask(std::bind_front(&SystemThreaded::ThreadPerEntityTask, this), thread, CurrentDeltaTime, std::as_const(threadOffsets), std::as_const(ThreadEntityInfo[thread]));
+				ThreadPerEntityRunner->AddWorkTask(std::bind_front(&SystemThreaded::ThreadPerEntityTask, this), thread, CurrentDeltaTime, std::as_const(threadOffsets), std::as_const(ThreadEntityInfo[thread]));
 			}
 		}
 		if (!IgnoreThreadSaveFunctions)
 		{
 			for (const auto& threadSaveFunction : ThreadSaveFunctions)
 			{
-				ThreadRunner->AddSaveTask(threadSaveFunction);
+				ThreadPerEntityRunner->AddSaveTask(threadSaveFunction);
 			}
 		}
 	}
@@ -324,11 +354,14 @@ private:
 			{
 				ThreadRunner->AddWorkTask(std::bind_front(&SystemThreaded::PostUpdate, this), thread, CurrentDeltaTime);
 			}
+			return;
 		}
-		else
+		else if (RunAlone)
 		{
 			PostUpdate(0, CurrentDeltaTime);
+			return;
 		}
+		ThreadRunner->AddWorkTask(std::bind_front(&SystemThreaded::PostUpdate, this), 0, CurrentDeltaTime);
 	}
 
 	void ThreadPerEntityTask(int thread, const double deltaTime, const std::vector<DataOffsets>& threadOffsets, const std::vector<ThreadEntityAccessInfo>& entitiesInfo)
@@ -419,11 +452,11 @@ private:
 			auto begin = storage.begin();
 			auto end = storage.end();
 			auto spanIt = span.begin() + offset.startOffset;
-			std::ranges::copy(storage, spanIt);
+			std::ranges::move(storage, spanIt);
 		}
 	}
 
-	std::vector<DataOffsets> GetThreadAccessOffsets(int thread)
+	std::vector<DataOffsets> GetThreadAccessOffsets(const int thread)
 	{
 		return ThreadDataOffsets[thread];
 	}
@@ -440,7 +473,7 @@ private:
 		}
 
 		size_t entityCount = 0;
-		for (auto& info : FetchedEntitiesInfo)
+		for (const auto& info : FetchedEntitiesInfo)
 		{
 			entityCount += info.EntityCount;
 		}
@@ -451,12 +484,16 @@ private:
 			return;
 		}
 
-		size_t entitiesPerThread = std::floor(entityCount / ThreadCount);
-		size_t extraToFirstThread = entityCount % ThreadCount;
+		const size_t entitiesPerThread = std::floor(entityCount / ThreadCount);
+		size_t extra = entityCount % ThreadCount;
 
-		int currentThread = 1;
-		int currentOuterIndex;
-		size_t currentThreadEntitiesLeft = entitiesPerThread + extraToFirstThread;
+		int currentThread = 0;
+		size_t currentThreadEntitiesLeft = entitiesPerThread;
+		if(extra > 0)
+		{
+			currentThreadEntitiesLeft++;
+			extra -= 1;
+		}
 		size_t transferEntitiesCount = 0;
 		size_t entitiesTransferred = 0;
 		size_t entitiesLeftToTransfer = entityCount;
@@ -471,7 +508,7 @@ private:
 			{
 				continue;
 			}
-			for (size_t i = 0; i < ThreadCount; i++)
+			for (size_t i = currentThread; i < ThreadCount; i++)
 			{
 				if (currentThreadEntitiesLeft >= typeEntitiesLeftToTransfer)
 				{
@@ -498,9 +535,9 @@ private:
 				ThreadEntityAccessInfo entityInfo;
 				entityInfo.EntityCount = offsets.endOffset - offsets.startOffset;
 				entityInfo.EntityLocators = std::vector<EntityStorageLocator>(entityInfo.EntityCount);
-				auto begin = FetchedEntitiesInfo[currentFetchEntity].EntityLocators.begin() + currentStartOffset;
-				auto end = FetchedEntitiesInfo[currentFetchEntity].EntityLocators.begin() + currentEndOffset;
-				auto destinationIt = entityInfo.EntityLocators.begin();
+				const auto begin = FetchedEntitiesInfo[currentFetchEntity].EntityLocators.begin() + currentStartOffset;
+				const auto end = FetchedEntitiesInfo[currentFetchEntity].EntityLocators.begin() + currentEndOffset;
+				const auto destinationIt = entityInfo.EntityLocators.begin();
 				std::ranges::copy(begin, end, destinationIt);
 				entityInfo.Type = FetchedEntitiesInfo[currentFetchEntity].Type;
 				entityInfo.TypeName = FetchedEntitiesInfo[currentFetchEntity].TypeName;
@@ -509,10 +546,15 @@ private:
 
 				if (currentThreadEntitiesLeft == 0)
 				{
-					ThreadDataOffsets[currentThread - 1].push_back(offsets);
-					ThreadEntityInfo[currentThread - 1].push_back(entityInfo);
+					ThreadDataOffsets[currentThread].emplace_back(offsets);
+					ThreadEntityInfo[currentThread].emplace_back(entityInfo);
 					currentThread++;
 					currentThreadEntitiesLeft = entitiesPerThread;
+					if (extra > 0)
+					{
+						currentThreadEntitiesLeft++;
+						extra -= 1;
+					}
 					if (entitiesLeftToTransfer == 0)
 					{
 						break;
@@ -520,8 +562,8 @@ private:
 				}
 				else if (transferredEntitiesCount == typeEntityCount)
 				{
-					ThreadDataOffsets[currentThread - 1].push_back(offsets);
-					ThreadEntityInfo[currentThread - 1].push_back(entityInfo);
+					ThreadDataOffsets[currentThread].emplace_back(offsets);
+					ThreadEntityInfo[currentThread].emplace_back(entityInfo);
 					break;
 				}
 			}
@@ -542,7 +584,7 @@ private:
 	{
 		for (size_t currentFetchEntity = 0; currentFetchEntity < FetchedEntitiesInfo.size(); currentFetchEntity++)
 		{
-			size_t entityCount = FetchedEntitiesInfo[currentFetchEntity].EntityCount;
+			const size_t entityCount = FetchedEntitiesInfo[currentFetchEntity].EntityCount;
 			DataOffsets offsets =
 			{
 				.outerIndex = currentFetchEntity,
@@ -551,7 +593,7 @@ private:
 			};
 
 			ThreadDataOffsets[0].push_back(offsets);
-			auto fetchedEntityInfo = FetchedEntitiesInfo[currentFetchEntity];
+			const auto& fetchedEntityInfo = FetchedEntitiesInfo[currentFetchEntity];
 			ThreadEntityAccessInfo accessInfo;
 			accessInfo.Type = fetchedEntityInfo.Type;
 			accessInfo.TypeName = fetchedEntityInfo.TypeName;
@@ -568,18 +610,19 @@ private:
 	}
 
 protected:
-	int GetThreadCount() { return ThreadCount; }
+	int GetThreadCount() const { return ThreadCount; }
 
 private:
+	ThreadedTaskRunner* ThreadRunner = nullptr;
+	ThreadedPerEntityTaskRunner* ThreadPerEntityRunner = nullptr;
 	std::vector<SystemThreadInfo> RuntimeThreadInfo;
-	int MinEntitiesPerThread = 8;
+	int MinEntitiesPerThread = 1;
 	int ThreadCount = 1;
 
 	std::vector<std::vector<DataOffsets>> ThreadDataOffsets;
 	std::vector<std::vector<ThreadEntityAccessInfo>> ThreadEntityInfo;
 	std::vector<std::vector<std::function<void()>>> ThreadCopyFunctions;
 	std::vector<std::function<void()>> ThreadSaveFunctions;
-	bool RunAlone = false;
 	bool ThreadedUpdateCalls = false;
 	bool IgnoreThreadSaveFunctions = false;
 	bool AllowDestructiveEditsInThreads = false;

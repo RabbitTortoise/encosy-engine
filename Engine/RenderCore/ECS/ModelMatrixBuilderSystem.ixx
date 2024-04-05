@@ -49,9 +49,6 @@ protected:
 	void Destroy() override {}
 
 private:
-
-	EntityType cameraType = -1;
-
 	ReadOnlyComponentStorage<TransformComponent> TransformComponents;
 	WriteReadComponentStorage<ModelMatrixComponent> ModelMatrixComponents;
 

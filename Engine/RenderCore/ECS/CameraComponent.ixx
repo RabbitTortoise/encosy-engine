@@ -1,6 +1,6 @@
 module;
-#include <glm/glm.hpp>
-#include <glm/gtc/quaternion.hpp>
+#include <glm/vec3.hpp>
+#include <glm/mat4x4.hpp>
 
 export module Components.CameraComponent;
 

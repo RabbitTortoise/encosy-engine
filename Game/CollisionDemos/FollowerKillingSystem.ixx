@@ -57,7 +57,7 @@ protected:
 		dc.TimeToLive -= deltaTime;
 		if (dc.TimeToLive < 0)
 		{
-			DeleteEntity(entity);
+			DeleteEntity(entity, entityType);
 		}
 	}
 

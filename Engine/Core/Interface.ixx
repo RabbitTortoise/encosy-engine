@@ -51,4 +51,3 @@ export namespace EncosyEngine
     EncosyCore* GetEncosyCore() { return EngineApp->GetEncosyCore(); }
     RenderCore* GetRenderCore() { return EngineApp->GetRenderCore(); }
 }
-

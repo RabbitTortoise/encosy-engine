@@ -1,5 +1,6 @@
 module;
 #include <fmt/core.h>
+#include <glm/vec3.hpp>
 
 export module Demo.Systems.FollowerModifySystem;
 
@@ -59,12 +60,16 @@ protected:
 		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
 		SetThreadedRunOptions(ThreadedRunOptions);
 
-		EnableDestructiveAccessToEntityStorage(GetEntityTypeInfo("FollowerEntity").Type);
-		EnableDestructiveAccessToEntityStorage(GetEntityTypeInfo("DyingFollowerEntity").Type);
+		FollowerEntityType = GetEntityTypeInfo("FollowerEntity").Type;
+		DyingFollowerEntityType = GetEntityTypeInfo("DyingFollowerEntity").Type;
 
-		AddComponentQueryForWriting(&FollowerComponents, &ThreadFollowerComponents);
+		EnableDestructiveAccessToEntityStorage(FollowerEntityType);
+		EnableDestructiveAccessToEntityStorage(DyingFollowerEntityType);
+
+		AddRequiredComponentQuery<FollowerComponent>();
+		AddRequiredComponentQuery<MovementComponent>();
+
 		AddComponentQueryForWriting(&SphereColliderComponents, &ThreadSphereColliderComponents);
-		AddComponentQueryForWriting(&MovementComponents, &ThreadMovementComponents);
 		AddComponentQueryForWriting(&TransformComponents, &ThreadTransformComponents);
 		AddComponentQueryForWriting(&MaterialComponents, &ThreadMaterialComponents);
 		AddComponentsForReading(&CollisionEvents);
@@ -77,7 +82,6 @@ protected:
 
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
-
 		SphereColliderComponent& ownCollider = GetCurrentEntityComponent(thread, &ThreadSphereColliderComponents);
 		TransformComponent& ownTransform = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		MaterialComponentLit& ownMaterial = GetCurrentEntityComponent(thread, &ThreadMaterialComponents);
@@ -101,7 +105,8 @@ protected:
 				newDc.TimeToLive = 5.0f;
 				auto newMc = ownMaterial;
 				newMc.RenderMesh = IcoMeshID;
-				ModifyEntityComponents<MovementComponent>(entity, entityType, newDc, newMc);
+				newMc.Color = glm::vec3(1.0f, 0.5f, 0.5f);
+				ModifyEntityComponents<MovementComponent>(entity, FollowerEntityType, DyingFollowerEntityType, newDc, newMc);
 
 			}
 		}
@@ -112,22 +117,19 @@ protected:
 
 private:
 
-	WriteReadComponentStorage<FollowerComponent> FollowerComponents;
 	WriteReadComponentStorage<SphereColliderComponent> SphereColliderComponents;
-	WriteReadComponentStorage<MovementComponent> MovementComponents;
-
 	WriteReadComponentStorage<TransformComponent> TransformComponents;
 	WriteReadComponentStorage<MaterialComponentLit> MaterialComponents;
 
-	ThreadComponentStorage<FollowerComponent> ThreadFollowerComponents;
 	ThreadComponentStorage<SphereColliderComponent> ThreadSphereColliderComponents;
-	ThreadComponentStorage<MovementComponent> ThreadMovementComponents;
 	ThreadComponentStorage<TransformComponent> ThreadTransformComponents;
 	ThreadComponentStorage<MaterialComponentLit> ThreadMaterialComponents;
 
 	ReadOnlyComponentStorage<CollisionEventComponent> CollisionEvents;
 
-
 	MeshLoader* MainMeshLoader;
 	MeshID IcoMeshID;
+
+	EntityType FollowerEntityType = -1;
+	EntityType DyingFollowerEntityType = -1;
 };

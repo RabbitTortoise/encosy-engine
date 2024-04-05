@@ -1,6 +1,6 @@
 # Specify required versions
 cmake_minimum_required(VERSION 3.28)
-set (CMAKE_CXX_STANDARD    23    CACHE    STRING    "C++ Version"    FORCE)
+set (CMAKE_CXX_STANDARD    20    CACHE    STRING    "C++ Version"    FORCE)
 set (CXX_SCAN_FOR_MODULES    ON    CACHE    STRING    "Modules"    FORCE)
 
 # Compile static libraries using multithreading.
@@ -77,8 +77,7 @@ set(MODELS_DIR "${PROJECT_SOURCE_DIR}/Game/Resources/Models")
 set(SHADERS_DIR "${PROJECT_SOURCE_DIR}/Game/Resources/Shaders")
 set(BUILD_RESOURCES_DIR "${CONFIGURATION_BINARY_DIR}/Game/Resources")
 
-add_custom_command(
-TARGET EncosyGame POST_BUILD
+add_custom_target(Game_Build_Setup
 	COMMAND ${CMAKE_COMMAND} -E make_directory "${TEXTURES_DIR}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${MODELS_DIR}"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_DIR}"
@@ -87,7 +86,7 @@ TARGET EncosyGame POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILD_RESOURCES_DIR}/Models"
     COMMAND ${CMAKE_COMMAND} -E make_directory "${BUILD_RESOURCES_DIR}/Shaders"
 )
-
+add_dependencies(EncosyGame Game_Build_Setup)
 # Shader building for the game is not yet supported
 #include("${PROJECT_SOURCE_DIR}/Game/GameShaderBuild.cmake")
 #APPEND_GLSL_TO_TARGET(EncosyGame ${PROJECT_SOURCE_DIR} ${BUILD_RESOURCES_DIR} "${EncosyGame_SHADERS_SRC}")

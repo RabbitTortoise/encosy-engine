@@ -147,6 +147,8 @@ public:
         // Clean Engine Resources
         EngineRenderCore->WaitForGpuIdle();
         EngineRenderCore->Cleanup();
+        EngineEncosyCore->Cleanup();
+      
         fmt::println("Quitting Engine Loop");
     }
 
