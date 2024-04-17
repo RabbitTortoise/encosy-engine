@@ -1,7 +1,5 @@
 module;
 
-#include <locale.h>
-#include <Windows.h>
 #include <fmt/core.h>
 
 #include <glm/glm.hpp>
@@ -108,8 +106,8 @@ void InitializeTestEntities()
 
 	TransformComponent tc = {
 	.Position = glm::vec3(0,-2,0),
-	.Scale = glm::vec3(10,10,1),
-	.Orientation = glm::quat(glm::vec3(glm::radians(90.0f),0,0)),
+	.Scale = glm::vec3(10,1,10),
+	.Orientation = glm::quat(glm::vec3(glm::radians(0.0f),0,0)),
 	};
 	MaterialComponentUnlit mc = {
 		.Diffuse = error,

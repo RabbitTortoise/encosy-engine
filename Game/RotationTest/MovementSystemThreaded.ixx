@@ -32,7 +32,7 @@ export class MovementSystemThreaded : public SystemThreaded
 
 public:
 	MovementSystemThreaded() {}
-	~MovementSystemThreaded() {}
+	~MovementSystemThreaded() override {}
 
 protected:
 	void Init() override
@@ -62,8 +62,6 @@ protected:
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		InputSystemData input = GetSystemData(&InputSystemDataStorage);
-		//
-
 		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		MovementComponent& mc = GetCurrentEntityComponent(thread, &ThreadMovementComponents);
 
@@ -84,7 +82,7 @@ protected:
 
 private:
 
-	CameraComponent mainCamera;
+	CameraComponent mainCamera = {};
 	EntityType cameraType = -1;
 
 	WriteReadComponentStorage<TransformComponent> TransformComponents;

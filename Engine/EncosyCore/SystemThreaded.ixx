@@ -334,7 +334,8 @@ private:
 			const auto& threadOffsets = ThreadDataOffsets[thread];
 			if (ThreadEntityInfo[thread].size() > 0)
 			{
-				ThreadPerEntityRunner->AddWorkTask(std::bind_front(&SystemThreaded::ThreadPerEntityTask, this), thread, CurrentDeltaTime, std::as_const(threadOffsets), std::as_const(ThreadEntityInfo[thread]));
+				ThreadPerEntityRunner->AddWorkTask(std::bind_front(&SystemThreaded::ThreadPerEntityTask, this), 
+					std::as_const(thread), std::as_const(CurrentDeltaTime), std::as_const(threadOffsets), std::as_const(ThreadEntityInfo[thread]));
 			}
 		}
 		if (!IgnoreThreadSaveFunctions)

@@ -73,7 +73,7 @@ class TaskThread
 		std::stop_token StopToken;
 		std::barrier<>* StartBarrier;
 		std::barrier<>* FinishBarrier;
-		std::jthread* Thread;
+		std::jthread Thread;
 
 		ThreadSafeQueue<std::function<void()>>* WorkTaskQueue;
 	};
@@ -97,7 +97,7 @@ public:
 		Data->StartBarrier = startBarrier;
 		Data->FinishBarrier = finishBarrier;
 		Data->WorkTaskQueue = workTaskQueue;
-		Data->Thread = new std::jthread(std::bind_front(&TaskThread::RunThread, this), Data);
+		Data->Thread = std::jthread(std::bind_front(&TaskThread::RunThread, this), Data);
 
 	}
 
@@ -159,7 +159,6 @@ public:
 		}
 		for (size_t i = 0; i < ThreadCount_; ++i)
 		{
-			delete Threads_[i].Data->Thread;
 			delete Threads_[i].Data;
 		}
 		delete StartBarrier_;
@@ -173,7 +172,7 @@ public:
 		auto finishToken = FinishBarrier_->arrive();
 		for (size_t i = 0; i < ThreadCount_; ++i)
 		{
-			Threads_[i].Data->Thread->join();
+			Threads_[i].Data->Thread.join();
 		}
 		ForceStopped = true;
 	}
@@ -223,7 +222,7 @@ class PerEntityTaskThread
 		std::barrier<>* WorkBarrier;
 		std::barrier<>* SaveBarrier;
 		std::barrier<>* FinishBarrier;
-		std::jthread* Thread;
+		std::jthread Thread;
 
 		ThreadSafeQueue<std::function<void()>>* CopyTaskQueue;
 		ThreadSafeQueue<std::function<void()>>* WorkTaskQueue;
@@ -256,7 +255,7 @@ public:
 		Data->CopyTaskQueue = copyTaskQueue;
 		Data->WorkTaskQueue = workTaskQueue;
 		Data->SaveTaskQueue = saveTaskQueue;
-		Data->Thread = new std::jthread(std::bind_front(&PerEntityTaskThread::RunPerEntityThread, this), Data);
+		Data->Thread = std::jthread(std::bind_front(&PerEntityTaskThread::RunPerEntityThread, this), Data);
 
 	}
 
@@ -330,7 +329,6 @@ public:
 		}
 		for (size_t i = 0; i < ThreadCount_; ++i)
 		{
-			delete Threads_[i].Data->Thread;
 			delete Threads_[i].Data;
 		}
 		delete StartBarrier_;
@@ -346,7 +344,7 @@ public:
 		auto finishToken = FinishBarrier_->arrive();
 		for (size_t i = 0; i < ThreadCount_; ++i)
 		{
-			Threads_[i].Data->Thread->join();
+			Threads_[i].Data->Thread.join();
 		}
 		ForceStopped = true;
 	}

@@ -32,7 +32,7 @@ export class MovementSystem : public System
 
 public:
 	MovementSystem() {}
-	~MovementSystem() {}
+	~MovementSystem() override {}
 
 protected:
 	void Init() override 
@@ -53,13 +53,14 @@ protected:
 		AddForbiddenComponentQuery<CameraComponent>();
 	}
 	void PreUpdate(const double deltaTime) override {}
-	void Update(const double deltaTime) override {}
+	void Update(const double deltaTime) override
+	{
+		CameraControllerSystemData csData = GetSystemData(&CameraControllerSystemDataStorage);
+		mainCamera = GetEntityComponent(csData.MainCamera, cameraType, &CameraEntityComponents);
+	}
 	void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		InputSystemData input = GetSystemData(&InputSystemDataStorage);
-		CameraControllerSystemData csData = GetSystemData(&CameraControllerSystemDataStorage);
-		CameraComponent mainCamera = GetEntityComponent(csData.MainCamera, cameraType, &CameraEntityComponents);
-
 		TransformComponent& tc = GetCurrentEntityComponent(&TransformComponents);
 		MovementComponent& mc = GetCurrentEntityComponent(&MovementComponents);
 
@@ -79,6 +80,7 @@ protected:
 
 private:
 
+	CameraComponent mainCamera = {};
 	EntityType cameraType = -1;
 
 	WriteReadComponentStorage<TransformComponent> TransformComponents;
