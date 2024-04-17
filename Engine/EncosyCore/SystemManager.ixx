@@ -12,6 +12,7 @@ import EncosyCore.Entity;
 import EncosyCore.EntityManager;
 import EncosyCore.ComponentManager;
 import EncosyCore.ThreadedTaskRunner;
+import EncosyEngine.ProfilerInterface;
 
 import <map>;
 import <set>;
@@ -290,9 +291,12 @@ protected:
 
 	void UpdateSystems(const double deltaTime)
 	{
+		int batch = 0;
 		for (const auto& systemRunBatch : RegularSystemBatches)
 		{
 			UpdateSystemBatch(deltaTime, systemRunBatch);
+			ProfilerInterface::CaptureTickSubTiming(RegularSystemBatchesNames[batch]);
+			batch++;
 		}
 	}
 

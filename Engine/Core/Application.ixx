@@ -8,6 +8,7 @@ export module EncosyEngine.Application;
 import EncosyEngine.WindowManager;
 import EncosyEngine.EncosyCore;
 import EncosyEngine.RenderCore;
+import EncosyEngine.ProfilerInterface;
 
 import <thread>;
 import <numeric>;
@@ -73,12 +74,25 @@ public:
 
         LastFrametimes = std::vector<double>(LastFramesCount, fixedRenderDeltaTime);
 
+        ProfilerInterface::PrepareToCapture(1000);
+        bool profilerStarted = false;
+        auto profilerStart = steady_clock::now() + seconds(10);
         while (!MainWindow->ShouldQuit())
         {
             // Compute application frame time (delta time) and update application
             frameEnd = steady_clock::now();
             const auto clockFrameTime = frameEnd - frameStart;
             double frameTime = std::chrono::duration<double>(clockFrameTime).count();
+            
+            if (!profilerStarted)
+            {
+                if (frameEnd > profilerStart)
+                {
+                    profilerStarted = true;
+                    ProfilerInterface::StartCapture();
+                }
+            }
+            
             frameStart = frameEnd;
 
             accumulatedPhysicsTime += frameTime;
@@ -125,7 +139,9 @@ public:
                 accumulatedUpdateTime -= updateDeltaTime;
                 simulatedUpdateTime += physicsDeltaTime;
 
+                ProfilerInterface::CaptureTickStart();
                 EngineEncosyCore->PrimaryWorldSystemUpdate(updateDeltaTime);
+                ProfilerInterface::CaptureTickEnd();
             }
 
             // Render System Update
@@ -148,7 +164,7 @@ public:
         EngineRenderCore->WaitForGpuIdle();
         EngineRenderCore->Cleanup();
         EngineEncosyCore->Cleanup();
-      
+       
         fmt::println("Quitting Engine Loop");
     }
 

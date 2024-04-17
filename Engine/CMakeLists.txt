@@ -114,6 +114,8 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/WindowManager.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/MatrixCalculations.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/SetupCoreECS.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Core/Profiler.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ProfilerInterface.ixx"
 	
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/TransformComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystem.ixx"
