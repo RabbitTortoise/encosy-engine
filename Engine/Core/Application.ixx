@@ -8,6 +8,7 @@ export module EncosyEngine.Application;
 import EncosyEngine.WindowManager;
 import EncosyEngine.EncosyCore;
 import EncosyEngine.RenderCore;
+import EncosyEngine.ProfilerInterface;
 
 import <thread>;
 import <numeric>;
@@ -49,9 +50,15 @@ public:
         EngineEncosyCore->InitCoreSystems(EngineWindowManager.get(), EngineRenderCore.get());
 
     }
+
+    void LateInit()
+    {
+        EngineRenderCore->BuildRaytracingStructures();
+    }
+
     void EngineLoop()
     {
-
+        LateInit();
         using namespace std::chrono;
 
         auto frameStart = steady_clock::now();
@@ -75,10 +82,12 @@ public:
 
         while (!MainWindow->ShouldQuit())
         {
+
             // Compute application frame time (delta time) and update application
             frameEnd = steady_clock::now();
             const auto clockFrameTime = frameEnd - frameStart;
             double frameTime = std::chrono::duration<double>(clockFrameTime).count();
+            
             frameStart = frameEnd;
 
             accumulatedPhysicsTime += frameTime;
@@ -131,9 +140,10 @@ public:
             // Render System Update
             if (EngineRenderCore->CheckIfRenderingConditionsMet())
             {
+                EngineRenderCore->SetupCommandBuffer();
                 EngineRenderCore->RenderStart();
                 EngineEncosyCore->PrimaryWorldRenderUpdate(frameTime);
-                EngineRenderCore->EndRecording();
+                EngineRenderCore->RenderEnd();
                 EngineRenderCore->SubmitToQueue();
             }
 
@@ -145,10 +155,11 @@ public:
         }
 
         // Clean Engine Resources
-        EngineRenderCore->WaitForGpuIdle();
+        EngineRenderCore->StopRenderingForcefully();
+        EngineEncosyCore->PrimaryWorldCleanup();
         EngineRenderCore->Cleanup();
         EngineEncosyCore->Cleanup();
-      
+       
         fmt::println("Quitting Engine Loop");
     }
 

@@ -20,7 +20,8 @@ macro(APPEND_GLSL_TO_TARGET targetName workingDir binaryDir shaderlist)
 	
 	  add_custom_command(
 		TARGET EngineShaders
-	    COMMAND "${GLSL_VALIDATOR}" -V ${GLSL} -o ${SPIRV}
+	    #COMMAND "${GLSL_VALIDATOR}" --target-env vulkan1.3 ${GLSL} -o ${SPIRV} -g
+	    COMMAND "${GLSL_VALIDATOR}" --target-env vulkan1.3 ${GLSL} -o ${SPIRV}
 	    DEPENDS ${GLSL})
 	  list(APPEND SPIRV_BINARY_FILES ${SPIRV})
 	endforeach(GLSL)

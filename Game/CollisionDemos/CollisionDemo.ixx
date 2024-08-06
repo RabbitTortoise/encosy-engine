@@ -26,6 +26,9 @@ import Demo.SystemData.SpawningSystem;
 import RenderCore.MeshLoader;
 import RenderCore.TextureLoader;
 import RenderCore.RenderPipelineManager;
+import RenderCore.VulkanTypes;
+
+import EncosyGame.DemoCommon;
 
 import <map>;
 import <vector>;
@@ -60,13 +63,13 @@ export void InitCollisionDemo(glm::vec3 playRegionMin, glm::vec3 playRegionMax)
 
 	auto leaderInfo = WorldEntityManager->CreateEntityType<
 		TransformComponent,
-		MaterialComponentLit,
+		MaterialComponentRaytracing,
 		LeaderComponent,
 		MovementComponent>
 		("LeaderEntity");
 	auto followerInfo = WorldEntityManager->CreateEntityType<
 		TransformComponent,
-		MaterialComponentLit,
+		MaterialComponentRaytracing,
 		ModelMatrixComponent,
 		FollowerComponent,
 		MovementComponent,
@@ -86,17 +89,10 @@ export void InitCollisionDemo(glm::vec3 playRegionMin, glm::vec3 playRegionMax)
 	std::uniform_real_distribution<float> distrY(playRegionMin.y, playRegionMax.y);
 	std::uniform_real_distribution<float> distrZ(playRegionMin.z, playRegionMax.z);
 
-	auto grassID = MainTextureLoader->LoadTexture("Grass_Texture.png");
-	auto grassNormalID = MainTextureLoader->LoadTexture("Grass_Normal.png");
-	auto rockID = MainTextureLoader->LoadTexture("Rock_Texture.png");
-	auto rockNormalID = MainTextureLoader->LoadTexture("Rock_Normal.png");
-	auto sandID = MainTextureLoader->LoadTexture("Sand_Texture.png");
-	auto sandNormalID = MainTextureLoader->LoadTexture("Sand_Normal.png");
-	auto snowID = MainTextureLoader->LoadTexture("Snow_Texture.png");
-	auto snowNormalID = MainTextureLoader->LoadTexture("Snow_Normal.png");
-	auto waterID = MainTextureLoader->LoadTexture("Water_Texture.png");
-	auto waterNormalID = MainTextureLoader->LoadTexture("Water_Normal.png");
-
+	// Textures
+	std::vector<PBRTextureSet> textureSets;
+	std::vector<TextureSetID> textureSetIDs;
+	CreateTextures(MainTextureLoader, EngineRenderCore, textureSets, textureSetIDs);
 	auto torus = (MainMeshLoader->GetEngineMeshID(EngineMesh::Torus));
 
 	MovementComponent mov = { {}, {7.0f} };
@@ -104,30 +100,30 @@ export void InitCollisionDemo(glm::vec3 playRegionMin, glm::vec3 playRegionMax)
 
 	for (size_t i = 0; i < 5; i++)
 	{
-		MaterialComponentLit mat1 = { grassID , grassNormalID, torus, 1.0f, glm::vec3(1,1,1)};
-		MaterialComponentLit mat2 = { rockID , rockNormalID, torus, 1.0f, glm::vec3(1,1,1) };
-		MaterialComponentLit mat3 = { sandID , sandNormalID, torus, 1.0f, glm::vec3(1,1,1) };
-		MaterialComponentLit mat4 = { snowID , snowNormalID, torus, 1.0f, glm::vec3(1,1,1) };
-		MaterialComponentLit mat5 = { waterID , waterNormalID, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentRaytracing mat1 = { 1, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentRaytracing mat2 = { 2, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentRaytracing mat3 = { 3, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentRaytracing mat4 = { 4, torus, 1.0f, glm::vec3(1,1,1) };
+		MaterialComponentRaytracing mat5 = { 5, torus, 1.0f, glm::vec3(1,1,1) };
 		LeaderComponent lc1 = { 1, {distrX(gen),distrY(gen),distrZ(gen) } };
 		LeaderComponent lc2 = { 2, {distrX(gen),distrY(gen),distrZ(gen) } };
 		LeaderComponent lc3 = { 3, {distrX(gen),distrY(gen),distrZ(gen) } };
 		LeaderComponent lc4 = { 4, {distrX(gen),distrY(gen),distrZ(gen) } };
 		LeaderComponent lc5 = { 5, {distrX(gen),distrY(gen),distrZ(gen) } };
 
-		TransformComponent tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {1,1,1},  glm::quat() };
+		TransformComponent tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {0,0,0},  glm::quat() };
 		auto createdEntity1 = WorldEntityManager->CreateEntityWithData(leaderInfo.Type, tc, mat1, lc1, mov);
 
-		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {1,1,1},  glm::quat() };
+		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {0,0,0},  glm::quat() };
 		auto createdEntity2 = WorldEntityManager->CreateEntityWithData(leaderInfo.Type, tc, mat2, lc2, mov);
 
-		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {1,1,1},  glm::quat() };
+		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {0,0,0},  glm::quat() };
 		auto createdEntity3 = WorldEntityManager->CreateEntityWithData(leaderInfo.Type, tc, mat3, lc3, mov);
 
-		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {1,1,1},  glm::quat() };
+		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {0,0,0},  glm::quat() };
 		auto createdEntity4 = WorldEntityManager->CreateEntityWithData(leaderInfo.Type, tc, mat4, lc4, mov);
 
-		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {1,1,1},  glm::quat() };
+		tc = { {distrX(gen),distrY(gen),distrZ(gen) },  {0,0,0},  glm::quat() };
 		auto createdEntity5 = WorldEntityManager->CreateEntityWithData(leaderInfo.Type, tc, mat5, lc5, mov);
 
 		ssData.CurrentLeaders.push_back(createdEntity1);
@@ -151,6 +147,10 @@ export void InitCollisionDemo(glm::vec3 playRegionMin, glm::vec3 playRegionMax)
 
 	ssData.PlayRegionMin = playRegionMin;
 	ssData.PlayRegionMax = playRegionMax;
+
+	ssData.minFPS = 60;
+	ssData.resetFPS = 75;
+	ssData.textureSets = textureSets;
 
 	WorldComponentManager->CreateSystemDataStorage(ssData);
 

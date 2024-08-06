@@ -33,7 +33,7 @@ export class SphereCollisionSystem : public SystemThreaded
 	.ThreadedUpdateCalls = false,
 	.AllowPotentiallyUnsafeEdits = true,
 	.AllowDestructiveEditsInThreads = true,
-	.IgnoreThreadSaveFunctions = false,
+	.IgnoreThreadSaveFunctions = true,
 	};
 
 public:
@@ -60,47 +60,58 @@ protected:
 
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
+		SystemThreadInfo threadInfo = GetThreadRuntimeInfo(thread);
+
 		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		const SphereColliderComponent sc = GetCurrentEntityComponent(thread, &SphereColliderComponents);
 		const float scaledRadius = sc.Radius * tc.Scale.x;
 
-		size_t vectorIndex = -1;
-		for (const auto& span : TransformComponents.Storage)
+		for (size_t outer = threadInfo.outerIndex; outer < TransformComponents.Storage.size(); outer++)
 		{
-			vectorIndex++;
-			size_t spanIndex = -1;
-			const auto& entityTypeVec = FetchedEntitiesInfo[vectorIndex];
-			for (const auto& tcOther : span)
+			const auto& entityTypeVec = FetchedEntitiesInfo[outer];
+			for (size_t inner = threadInfo.innerIndexRead + 1; inner < TransformComponents.Storage[outer].size(); inner++)
 			{
-				spanIndex++;
+				TransformComponent& tcOther = TransformComponents.Storage[outer][inner];
+				const auto& colliderOther = SphereColliderComponents.Storage[outer][inner];
+				const float scaledRadiusOther = colliderOther.Radius * tcOther.Scale.x;
+				const float collisionDistance = scaledRadius + scaledRadiusOther;
 
 				const float x = tc.Position.x - tcOther.Position.x;
-				if (std::abs(x) > scaledRadius) 
-				{ continue; }
+				if (std::abs(x) > collisionDistance) {continue;}
+
 				const float y = tc.Position.y - tcOther.Position.y;
-				if (std::abs(y) > scaledRadius) 
-				{ continue; }
+				if (std::abs(y) > collisionDistance){continue;}
+
 				const float z = tc.Position.z - tcOther.Position.z;
-				if (std::abs(z) > scaledRadius) 
-				{ continue; }
+				if (std::abs(z) > collisionDistance){continue;}
 
-				const Entity& otherEntity = entityTypeVec.EntityLocators[spanIndex].Entity;
-				if (otherEntity == entity)
-				{ continue; }
-
-				const glm::vec3 dir = {x, y, z};
-				const float radius2 = scaledRadius * scaledRadius;
+				const glm::vec3 dir = { x, y, z };
+				const float radius2 = collisionDistance * collisionDistance;
 				const float len2 = glm::length2(dir);
 				if (len2 < radius2)
 				{
 					const float len = std::sqrt(len2);
-					const float collisionDepth = scaledRadius - len;
-					const glm::vec3 change = glm::normalize(dir) * collisionDepth;
-					tc.Position += change;
-
+					const float collisionDepth = collisionDistance - len;
+					glm::vec3 change = glm::normalize(dir) * collisionDepth / 2.0f;
+					const Entity otherEntity = entityTypeVec.EntityLocators[outer].Entity;
+					if (!sc.Unmovable || !colliderOther.Unmovable)
+					{
+						change = change * 2.0f;
+					}
+					if (!sc.Unmovable)
+					{
+						TransformComponent& tcRef = TransformComponents.Storage[threadInfo.outerIndex][threadInfo.innerIndexRead];
+						tcRef.Position += change;
+						//SetEntityComponent(entity, entityType, tc);  // This function is not thread safe yet
+					}
+					if (!colliderOther.Unmovable)
+					{
+						tcOther.Position -= change;
+						//SetEntityComponent(otherEntity, entityTypeVec.Type, tcOtherNew); // This function is not thread safe yet
+					}
 					CreateNewComponentToStorage({ typeid(CollisionEventComponent), 0 }, CollisionEventComponent(entity, otherEntity, collisionDepth));
 				}
-			}		
+			}
 		}
 	}
 	void PostUpdate(const int thread, const double deltaTime) override{}

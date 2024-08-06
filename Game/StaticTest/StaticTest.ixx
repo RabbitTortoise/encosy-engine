@@ -17,7 +17,9 @@ import Components.StaticComponent;
 import RenderCore.MeshLoader;
 import RenderCore.TextureLoader;
 import RenderCore.RenderPipelineManager;
+import RenderCore.VulkanTypes;
 
+import EncosyGame.DemoCommon;
 
 import <map>;
 import <vector>;
@@ -51,33 +53,20 @@ export void InitStaticTest(int testDimensionsX, int testDimensionsY, int testDim
 	auto MainMeshLoader = EngineRenderCore->GetMeshLoader();
 	auto MainRenderPipelineManager = EngineRenderCore->GetRenderPipelineManager();
 
-	auto grassID = MainTextureLoader->LoadTexture("Grass_Texture.png");
-	auto grassNormalID = MainTextureLoader->LoadTexture("Grass_Normal.png");
-	auto rockID = MainTextureLoader->LoadTexture("Rock_Texture.png");
-	auto rockNormalID = MainTextureLoader->LoadTexture("Rock_Normal.png");
-	auto sandID = MainTextureLoader->LoadTexture("Sand_Texture.png");
-	auto sandNormalID = MainTextureLoader->LoadTexture("Sand_Normal.png");
-	auto snowID = MainTextureLoader->LoadTexture("Snow_Texture.png");
-	auto snowNormalID = MainTextureLoader->LoadTexture("Snow_Normal.png");
-	auto waterID = MainTextureLoader->LoadTexture("Water_Texture.png");
-	auto waterNormalID = MainTextureLoader->LoadTexture("Water_Normal.png");
+	// Textures
+	std::vector<PBRTextureSet> textureSets;
+	std::vector<TextureSetID> textureSetIDs;
+	CreateTextures(MainTextureLoader, EngineRenderCore, textureSets, textureSetIDs);
 
 	std::vector<MeshID> meshIDs;
 	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Cube));
 	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere));
 	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Torus));
 
-	std::vector<TextureID> textureIds;
-	textureIds.push_back(grassID);
-	textureIds.push_back(rockID);
-	textureIds.push_back(sandID);
-	textureIds.push_back(snowID);
-	textureIds.push_back(waterID);
-
 	ModelMatrixComponent matrix = {};
 	TransformComponent tc = {};
-	MaterialComponentLit mcLit = {};
 	StaticComponent stat = {};
+	MaterialComponentRaytracing mcRay = {};
 
 	float dist = 2.0f;
 
@@ -94,31 +83,29 @@ export void InitStaticTest(int testDimensionsX, int testDimensionsY, int testDim
 		for (size_t y = 0; y < testDimensionsY; y++)
 		{
 			zCur = zStart;
-			for (size_t z = 0; z < testDimensionsY; z++)
+			for (size_t z = 0; z < testDimensionsZ; z++)
 			{
 
 				float rand1 = RandomNumber0_1();
 				float rand2 = RandomNumber0_1();
-				int textureSelect = std::round(rand1 * (textureIds.size() - 1));
+				int textureSelect = std::round(rand1 * (textureSets.size() - 1)) + 1;
 				int meshSelect = std::round(rand2 * (meshIDs.size() - 1));
 
-				TextureID usedTextureID = textureIds[textureSelect];
 				MeshID usedMeshId = meshIDs[meshSelect];
-				mcLit = {
-					.Diffuse = usedTextureID,
-					.Normal = usedTextureID + 1,
-					.RenderMesh = usedMeshId,
-					.TextureRepeat = 1.0f
-				};
 				tc = {
 					.Position = glm::vec3(xCur,yCur,zCur),
 					.Scale = glm::vec3(0.75,0.75,0.75),
 					.Orientation = glm::quat(glm::vec3(0,0,0)),
 				};
 
+				mcRay.TextureSet = textureSelect;
+				mcRay.RenderMesh = usedMeshId;
+				mcRay.TextureRepeat = 1.0f;
+				mcRay.Color = glm::vec3(1, 1, 1);
+
 				matrix.ModelMatrix = MatrixCalculations::CalculateModelMatrix(tc);
 
-				WorldEntityManager->CreateEntityWithData(tc, mcLit, stat, matrix);
+				WorldEntityManager->CreateEntityWithData(tc, mcRay, stat, matrix);
 
 				zCur -= dist;
 			}

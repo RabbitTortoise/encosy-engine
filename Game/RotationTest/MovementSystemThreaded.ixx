@@ -32,7 +32,7 @@ export class MovementSystemThreaded : public SystemThreaded
 
 public:
 	MovementSystemThreaded() {}
-	~MovementSystemThreaded() override {}
+	~MovementSystemThreaded() {}
 
 protected:
 	void Init() override
@@ -82,7 +82,7 @@ protected:
 
 private:
 
-	CameraComponent mainCamera = {};
+	CameraComponent mainCamera;
 	EntityType cameraType = -1;
 
 	WriteReadComponentStorage<TransformComponent> TransformComponents;

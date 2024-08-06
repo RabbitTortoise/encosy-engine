@@ -32,6 +32,8 @@ module;
 // Sometimes even standard importable libraries have to be included instead of imported to help intellisense.
 #include <span>    
 
+#include "fmt/base.h"
+
 export module RenderCore.VulkanDescriptors;
 
 import RenderCore.VulkanErrorLogger;
@@ -39,6 +41,12 @@ import <vector>;
 import <deque>;
 
 
+export
+struct BindlessDescriptors
+{
+    VkDescriptorSet dsUpdateAfterBind{};
+    VkDescriptorSet dsNonuniform{};
+};
 
 export class DescriptorAllocatorGrowable
 {
@@ -120,6 +128,41 @@ public:
         return ds;
     }
 
+    VkDescriptorSet AllocateDynamic(VkDevice device, VkDescriptorSetLayout layout, uint32_t numDescriptors)
+    {
+        // Get or create a pool to allocate from
+        VkDescriptorPool poolToUse = GetPool(device);
+
+        VkDescriptorSetVariableDescriptorCountAllocateInfoEXT variableInfo{};
+        variableInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO_EXT;
+        variableInfo.descriptorSetCount = 1;
+        variableInfo.pDescriptorCounts = &numDescriptors;
+
+        VkDescriptorSetAllocateInfo allocInfo = {};
+        allocInfo.pNext = &variableInfo;
+        allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool = poolToUse;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts = &layout;
+
+        VkDescriptorSet ds;
+        VkResult result = vkAllocateDescriptorSets(device, &allocInfo, &ds);
+
+        // Allocation failed. Try again with new pool.
+        if (result == VK_ERROR_OUT_OF_POOL_MEMORY || result == VK_ERROR_FRAGMENTED_POOL) {
+
+            FullPools.push_back(poolToUse);
+
+            poolToUse = GetPool(device);
+            allocInfo.descriptorPool = poolToUse;
+
+            VK_CHECK(vkAllocateDescriptorSets(device, &allocInfo, &ds));
+        }
+
+        ReadyPools.push_back(poolToUse);
+        return ds;
+    }
+
 private:
 
     VkDescriptorPool GetPool(VkDevice device)
@@ -154,7 +197,8 @@ private:
 
         VkDescriptorPoolCreateInfo pool_info = {};
         pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        pool_info.flags = 0;
+        pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT_EXT;
+        //pool_info.flags = 0;
         pool_info.maxSets = setCount;
         pool_info.poolSizeCount = (uint32_t)poolSizes.size();
         pool_info.pPoolSizes = poolSizes.data();
@@ -167,7 +211,7 @@ private:
     std::vector<PoolSizeRatio> Ratios;
     std::vector<VkDescriptorPool> FullPools;
     std::vector<VkDescriptorPool> ReadyPools;
-    uint32_t SetsPerPool;
+    uint32_t SetsPerPool = 0;
 
 };
 
@@ -195,6 +239,19 @@ public:
         Writes.push_back(write);
     }
 
+    void WriteImageArray(int binding, VkDescriptorType type, const std::vector<VkDescriptorImageInfo>& textureInfo)
+    {
+        VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+
+        write.pImageInfo = textureInfo.data();
+        write.dstBinding = binding;
+        write.descriptorType = type;
+        write.descriptorCount = textureInfo.size();
+        write.dstArrayElement = 0;
+
+        Writes.push_back(write);
+    }
+
     void WriteBuffer(int binding, VkBuffer buffer, size_t size, size_t offset, VkDescriptorType type)
     {
         VkDescriptorBufferInfo& info = BufferInfos.emplace_back(VkDescriptorBufferInfo{
@@ -212,6 +269,50 @@ public:
         write.pBufferInfo = &info;
 
         Writes.push_back(write);
+    }
+
+    void WriteBufferArray(int binding, VkDescriptorType type, std::vector<VkDescriptorBufferInfo>& bufferInfo)
+    {
+        VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+
+        write.dstBinding = binding;
+        write.dstSet = VK_NULL_HANDLE;
+        write.descriptorCount = bufferInfo.size();
+        write.descriptorType = type;
+        write.pBufferInfo = bufferInfo.data();
+
+        Writes.push_back(write);
+    }
+
+    void WriteSampler(int binding, VkSampler sampler, VkDescriptorType type)
+    {
+        VkDescriptorImageInfo descriptorImageInfo{};
+        descriptorImageInfo.sampler = sampler;
+        VkDescriptorImageInfo& info = ImageInfos.emplace_back(descriptorImageInfo);
+
+        VkWriteDescriptorSet write = { .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET };
+
+        write.dstBinding = binding;
+        write.dstSet = VK_NULL_HANDLE;
+        write.descriptorCount = 1;
+        write.descriptorType = type;
+        write.pImageInfo = &info;
+
+        Writes.push_back(write);
+    }
+
+    void WriteAccelerationStructure(int binding, VkWriteDescriptorSetAccelerationStructureKHR accelerationStructure)
+    {
+        VkWriteDescriptorSet accelerationStructureWrite{};
+        accelerationStructureWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        // The specialized acceleration structure descriptor has to be chained
+        accelerationStructureWrite.pNext = &accelerationStructure;
+        accelerationStructureWrite.dstSet = VK_NULL_HANDLE;
+        accelerationStructureWrite.dstBinding = binding;
+        accelerationStructureWrite.descriptorCount = 1;
+        accelerationStructureWrite.descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+
+        Writes.push_back(accelerationStructureWrite);
     }
 
     void Clear()
@@ -252,6 +353,16 @@ public:
         bindings.push_back(newbind);
     }
 
+    void AddBinding(uint32_t binding, VkDescriptorType type, uint32_t count)
+    {
+        VkDescriptorSetLayoutBinding newbind{};
+        newbind.binding = binding;
+        newbind.descriptorCount = count;
+        newbind.descriptorType = type;
+
+        bindings.push_back(newbind);
+    }
+
     void Clear()
     {
         bindings.clear();
@@ -267,7 +378,7 @@ public:
         info.pNext = nullptr;
 
         info.pBindings = bindings.data();
-        info.bindingCount = (uint32_t)bindings.size();
+        info.bindingCount = static_cast<uint32_t>(bindings.size());
         info.flags = 0;
 
         VkDescriptorSetLayout set;
@@ -276,8 +387,42 @@ public:
         return set;
     }
 
+    VkDescriptorSetLayout BuildWithExtFlags(VkDevice device, VkShaderStageFlags shaderStages, VkDescriptorBindingFlagsEXT extFlags)
+    {
+        for (auto& b : bindings) {
+            b.stageFlags |= shaderStages;
+        }
+
+        std::vector< VkDescriptorBindingFlagsEXT> flags;
+        for (int i = 0; i < bindings.size(); ++i)
+        {
+            flags.push_back(extFlags);
+        }
+
+        VkDescriptorSetLayoutBindingFlagsCreateInfoEXT binding_flags{};
+        binding_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO_EXT;
+        binding_flags.bindingCount = static_cast<uint32_t>(bindings.size());
+        binding_flags.pBindingFlags = flags.data();
+
+
+        VkDescriptorSetLayoutCreateInfo info = { .sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
+        info.pBindings = bindings.data();
+        info.bindingCount = static_cast<uint32_t>(bindings.size());
+        info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+        info.pNext = &binding_flags;
+
+
+        VkDescriptorSetLayout set;
+
+        VK_CHECK(vkCreateDescriptorSetLayout(device, &info, nullptr, &set));
+
+        return set;
+    }
+
+
 private:
     std::vector<VkDescriptorSetLayoutBinding> bindings;
+    std::vector<VkDescriptorSetLayoutBindingFlagsCreateInfoEXT> bindingCreateInfoEXT;
 };
 
 export class DescriptorAllocator 

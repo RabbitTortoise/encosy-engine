@@ -16,7 +16,7 @@ import <vector>;
 import <map>;
 import <filesystem>;
 
-export enum class EngineTextures { ErrorCheckerBoard = 0, White, Black };
+export enum class EngineTextures { ErrorCheckerBoard = 0, White, Black, Grey, NeutralNormal, Last };
 
 export class TextureLoader
 {
@@ -28,7 +28,7 @@ public:
 	TextureLoader(AllocationHandler* allocationHandler) : vkAllocationHandler(allocationHandler) 
 	{
 		std::wstring path = std::filesystem::current_path().native();;
-		fmt::println(L"Initializing TextureLoader: Current working directory: {}", path);
+		//fmt::println(L"Initializing TextureLoader: Current working directory: {}", path);
 	
 		InitEngineTextures();
 	}
@@ -151,7 +151,8 @@ private:
 			uint32_t white = 0xFFFFFFFF;
 			uint32_t black = 0xFF000000;
 			uint32_t magenta = 0xFFFF00FF;
-			uint32_t grey = 0xFFAAAAAA;
+			uint32_t grey = 0xFF7F7F7F;
+			uint32_t normal = 0xFFFF7F7F;
 
 			// Checkerboard image
 			std::array<uint32_t, 16 * 16 > pixels; //for 16x16 checkerboard texture
@@ -165,10 +166,14 @@ private:
 			AllocatedImage errorCheckerboardImage = vkAllocationHandler->AllocateAndUploadImageToGPU(pixels.data(), VkExtent3D{ 16, 16, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 			AllocatedImage whiteImage = vkAllocationHandler->AllocateAndUploadImageToGPU((void*)&white, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 			AllocatedImage blackImage = vkAllocationHandler->AllocateAndUploadImageToGPU((void*)&black, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+			AllocatedImage greyImage = vkAllocationHandler->AllocateAndUploadImageToGPU((void*)&grey, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
+			AllocatedImage normalImage = vkAllocationHandler->AllocateAndUploadImageToGPU((void*)&normal, VkExtent3D{ 1, 1, 1 }, VK_FORMAT_R8G8B8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT);
 		
 			TextureHandles.push_back(errorCheckerboardImage);
 			TextureHandles.push_back(whiteImage);
 			TextureHandles.push_back(blackImage);
+			TextureHandles.push_back(greyImage);
+			TextureHandles.push_back(normalImage);
 		}
 	}
 

@@ -68,10 +68,10 @@ protected:
 
 		AddRequiredComponentQuery<FollowerComponent>();
 		AddRequiredComponentQuery<MovementComponent>();
-
+		
 		AddComponentQueryForWriting(&SphereColliderComponents, &ThreadSphereColliderComponents);
 		AddComponentQueryForWriting(&TransformComponents, &ThreadTransformComponents);
-		AddComponentQueryForWriting(&MaterialComponents, &ThreadMaterialComponents);
+		AddComponentQueryForWriting(&RaytraceMaterialComponents, &ThreadRaytraceMaterialComponents);
 		AddComponentsForReading(&CollisionEvents);
 
 		IcoMeshID = MainMeshLoader->GetMeshID("DeadFollower.obj");
@@ -84,7 +84,7 @@ protected:
 	{
 		SphereColliderComponent& ownCollider = GetCurrentEntityComponent(thread, &ThreadSphereColliderComponents);
 		TransformComponent& ownTransform = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
-		MaterialComponentLit& ownMaterial = GetCurrentEntityComponent(thread, &ThreadMaterialComponents);
+		MaterialComponentRaytracing& ownMaterial = GetCurrentEntityComponent(thread, &ThreadRaytraceMaterialComponents);
 
 		size_t vectorIndex = 0;
 		float scaledRadius = ownTransform.Scale.x * ownCollider.Radius;
@@ -94,19 +94,21 @@ protected:
 			for (const auto& collisionEvent : span)
 			{
 				if (collisionEvent.A != entity) { continue; }
+
 				if (collisionEvent.CollisionDepth < scaledRadius / 1.5f) { continue; }
 				if (HasComponentType<DyingFollowerComponent>(collisionEvent.B)) { continue; }
 
-				auto otherMaterial = GetReadOnlyComponentFromEntity<MaterialComponentLit>(collisionEvent.B);
-				if (otherMaterial.Diffuse == ownMaterial.Diffuse) { continue; }
+				auto otherMaterial = GetReadOnlyComponentFromEntity<MaterialComponentRaytracing>(collisionEvent.B);
+				if (otherMaterial.TextureSet == ownMaterial.TextureSet) { continue; }
 
 				DyingFollowerComponent newDc;
 				newDc.PushRange = ownTransform.Scale.x;
 				newDc.TimeToLive = 5.0f;
-				auto newMc = ownMaterial;
-				newMc.RenderMesh = IcoMeshID;
-				newMc.Color = glm::vec3(1.0f, 0.5f, 0.5f);
-				ModifyEntityComponents<MovementComponent>(entity, FollowerEntityType, DyingFollowerEntityType, newDc, newMc);
+
+				auto newRmc = ownMaterial;
+				newRmc.RenderMesh = IcoMeshID;
+				newRmc.Color = glm::vec3(1.0f, 0.4f, 0.4f);
+				ModifyEntityComponents<MovementComponent>(entity, FollowerEntityType, DyingFollowerEntityType, newDc, newRmc);
 
 			}
 		}
@@ -119,11 +121,11 @@ private:
 
 	WriteReadComponentStorage<SphereColliderComponent> SphereColliderComponents;
 	WriteReadComponentStorage<TransformComponent> TransformComponents;
-	WriteReadComponentStorage<MaterialComponentLit> MaterialComponents;
+	WriteReadComponentStorage<MaterialComponentRaytracing> RaytraceMaterialComponents;
 
 	ThreadComponentStorage<SphereColliderComponent> ThreadSphereColliderComponents;
 	ThreadComponentStorage<TransformComponent> ThreadTransformComponents;
-	ThreadComponentStorage<MaterialComponentLit> ThreadMaterialComponents;
+	ThreadComponentStorage<MaterialComponentRaytracing> ThreadRaytraceMaterialComponents;
 
 	ReadOnlyComponentStorage<CollisionEventComponent> CollisionEvents;
 

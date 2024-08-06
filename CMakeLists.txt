@@ -24,6 +24,7 @@ add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 # Used sources
 list(APPEND EncosyGame_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Core/main.cppm"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Core/DemoCommon.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/CollisionDemo.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DynamicDemo.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DyingFollowerComponent.ixx"
@@ -47,6 +48,11 @@ list(APPEND EncosyGame_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementSystemThreaded.ixx"
 
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StaticTest/StaticTest.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RaytracingTest/RaytracingTest.ixx"
+
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/AsteroidField.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/MovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/MovementComponent.ixx"
 
 )
 # Used shaders, game
@@ -59,7 +65,9 @@ BASE_DIRS
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/Core
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/StaticTest
+	${CMAKE_CURRENT_SOURCE_DIR}/Game/RaytracingTest
 	${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos
+	${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField
 )
 target_link_libraries(EncosyGame PUBLIC EncosyEngine)
 

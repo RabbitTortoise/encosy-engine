@@ -19,8 +19,7 @@ import Components.MaterialComponent;
 
 import Systems.CameraControllerSystem;
 import Systems.InputSystem;
-import Systems.UnlitRenderSystem;
-import Systems.LitRenderSystem;
+import Systems.RaytracedRenderSystem;
 import Systems.ModelMatrixBuilderSystem;
 
 import SystemData.CameraControllerSystem;
@@ -29,14 +28,13 @@ import SystemData.InputSystem;
 import <string>;
 import <vector>;
 
-export 
+export
 std::vector<EntityOperationResult> InitializeEngineEntities(EntityManager* EM)
 {
 	std::vector<EntityOperationResult> InitializedTypes;
-		
+
 	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, CameraComponent>("CameraEntity"));
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentUnlit>("StaticSceneEntityUnlit"));
-	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentLit>("StaticSceneEntityLit"));
+	InitializedTypes.push_back(EM->CreateEntityType<TransformComponent, MaterialComponentRaytracing>("StaticSceneEntity"));
 
 	return InitializedTypes;
 }
@@ -56,19 +54,17 @@ void InitializeEngineSystems(EntityManager* EM, ComponentManager* CM, SystemMana
 	{
 		.MainCamera = {},
 		.MainWindow = WM->GetMainWindow(),
-		.Yaw = -90,
-		.Pitch = 0,
+		.CurrentYaw = -90,
+		.CurrentPitch = 0,
+		.DesiredYaw = -90,
+		.DesiredPitch = 0,
 	};
 
 	locator = CM->CreateSystemDataStorage(cameraSystemData);
 	SM->AddSystem<CameraControllerSystem>("CameraControllerSystem");
 
-	// Model matrix builder
-	SM->AddSystem<ModelMatrixBuilderSystem>("ModelMatrixBuilderSystem");
-	// Render System
-	SM->AddSystem<UnlitRenderSystem>("UnlitRenderSystem", RC);
-	// Render System
-	SM->AddSystem<LitRenderSystem>("LitRenderSystem", RC);
+	// Raytraced Render System
+	auto raytracingSystem = SM->AddSystem<RaytracedRenderSystem>("RaytracedRenderSystem", RC);
 }
 
 export
@@ -82,7 +78,7 @@ void CreateEngineEntities(EntityManager* EM, ComponentManager* CM, SystemManager
 
 	TransformComponent transform =
 	{
-		.Position = glm::vec3(0.0f, 0.0f, 5.0f),
+		.Position = glm::vec3(0.0f, 0.0f, 0.0f),
 		.Scale = glm::vec3(1.0f, 1.0f, 1.0f),
 		.Orientation = glm::quat(0.0f, 0.0f, 0.0f, 1.0f)
 	};

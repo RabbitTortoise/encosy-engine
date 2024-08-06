@@ -1,6 +1,7 @@
 module;
+
 #include <vulkan/vulkan.h>
-#include <VkBootstrap.h>
+
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 #include <fmt/core.h>
@@ -9,12 +10,9 @@ module;
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-
 #include <vma/vk_mem_alloc.h>
+#include <VkBootstrap.h>
 
-#include <imgui.h>
-#include <backends/imgui_impl_sdl3.h>
-#include <backends/imgui_impl_vulkan.h>
 #include <array>
 
 export module EncosyEngine.RenderCore;
@@ -24,16 +22,20 @@ import EncosyEngine.WindowManager;
 import EncosyCore.EncosyWorld;
 
 import RenderCore.Resources;
+import RenderCore.RenderThread;
+import RenderCore.RaytracingResources;
 import RenderCore.VulkanInitializers;
 import RenderCore.VulkanErrorLogger;
 
 import RenderCore.VulkanUtilities;
 import RenderCore.VulkanDescriptors;
+import RenderCore.VulkanRaytracing;
 import RenderCore.AllocationHandler;
 import RenderCore.MeshLoader;
 import RenderCore.TextureLoader;
 import RenderCore.ShaderLoader;
 import RenderCore.RenderPipelineManager;
+import RenderCore.VulkanImgui;
 
 
 import <memory>;
@@ -47,6 +49,8 @@ import <iostream>;
 import <format>;
 import <algorithm>;
 import <numeric>;
+import <mutex>;
+import <barrier>;
 
 
 export class RenderCore
@@ -64,6 +68,17 @@ public:
 	RenderPipelineManager* GetRenderPipelineManager() { return MainRenderPipelineManager.get(); }
 	AllocationHandler* GetAllocationHandler() { return MainAllocationHandler.get(); }
 	RenderCoreResources* GetRenderCoreResources() { return &Resources; }
+	RaytracingResources* GetRaytracingResources(){ return &RtResources; }
+
+	TextureSetID RegisterTextureSetForRaytracingUsage(PBRTextureSet set)
+	{
+		return MainVulkanRaytracing->RegisterTextureSetForRaytracingUsage(set);
+	}
+
+	void RegisterMeshForRaytracingUsage(MeshID meshId)
+	{
+		MainVulkanRaytracing->RegisterMeshForRaytracingUsage(meshId);
+	}
 
 protected:
 
@@ -73,261 +88,26 @@ protected:
 		Resources.MainWindow = window;
 		Resources.vkWindowExtent.height = window->GetHeight();
 		Resources.vkWindowExtent.width = window->GetWidth();
+
+		StartBarrier = new std::barrier(2);
+		FinishBarrier = new std::barrier(2);
+		MainRenderThread.CreateRenderThread(StopSource.get_token(), StartBarrier, FinishBarrier);
+		auto token = StartBarrier->arrive();
+
 		InitVulkan();
 		InitAllocationHandler();
-		InitSwapchain();
+		CreateSwapchain();
+		CreateDrawImages();
 		InitCommandPools();
 		InitSyncStructures();
 		InitSubSystems();
 		InitDescriptors();
+		MainVulkanRaytracing->InitRayTracing();
 		MainRenderPipelineManager->InitEngineRenderPipelines();
 		InitImgui();
 		InitSamplers();
 	}
 
-	bool CheckIfRenderingConditionsMet()
-	{
-		if (Resources.MainWindow->WasResized() || Resources.bResizeNeeded)
-		{
-			ResizeSwapChain();
-		}
-		if (Resources.MainWindow->IsMinimized())
-		{
-			return false;
-		}
-		return true;
-	}
-
-	void WaitForGpuIdle()
-	{
-		vkDeviceWaitIdle(Resources.vkDevice);
-	}
-
-protected:
-
-	void ResizeSwapChain()
-	{
-		vkDeviceWaitIdle(Resources.vkDevice);
-
-		DestroySwapchain();
-
-		Resources.vkWindowExtent.width = Resources.MainWindow->GetWidth();
-		Resources.vkWindowExtent.height = Resources.MainWindow->GetHeight();
-
-		CreateSwapchain(Resources.vkWindowExtent.width, Resources.vkWindowExtent.height);
-
-		Resources.bResizeNeeded = false;
-	}
-
-	void RenderStart()
-	{
-
-		// Wait until the gpu has finished rendering the last frame. Timeout of 1 second
-		VK_CHECK(vkWaitForFences(Resources.vkDevice, 1, &Resources.GetCurrentFrame().vkRenderFence, true, 1000000000));
-
-		Resources.GetCurrentFrame().vkDeletionQueue.flush();
-		Resources.GetCurrentFrame().vkFrameDescriptors.ClearPools(Resources.vkDevice);
-
-		VK_CHECK(vkResetFences(Resources.vkDevice, 1, &Resources.GetCurrentFrame().vkRenderFence));
-
-		// Request image from the swapchain
-		VkResult e = vkAcquireNextImageKHR(Resources.vkDevice, Resources.vkSwapchain, 1000000000, Resources.GetCurrentFrame().vkSwapchainSemaphore, nullptr, &Resources.CurrentSwapchainImageIndex);
-		if (e == VK_ERROR_OUT_OF_DATE_KHR) {
-			Resources.bResizeNeeded = true;
-			return;
-		}
-		else
-		{
-			VK_CHECK(e);
-		}
-
-		// Naming it cmd for shorter writing
-		Resources.CurrentCMD = Resources.GetCurrentFrame().vkMainCommandBuffer;
-
-		// Now that we are sure that the commands finished executing, we can safely reset the command buffer to begin recording again.
-		VK_CHECK(vkResetCommandBuffer(Resources.CurrentCMD, 0));
-
-		// Begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know that
-		VkCommandBufferBeginInfo cmdBeginInfo = vkInit::CommandBuffer_BeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
-
-
-		// RECORDING TO COMMAND BUFFER
-		// Start the command buffer recording
-		VK_CHECK(vkBeginCommandBuffer(Resources.CurrentCMD, &cmdBeginInfo));
-
-		Resources.vkDrawExtent.height = std::min(Resources.vkSwapchainExtent.height, Resources.vkDrawImage.imageExtent.height) * Resources.RenderScale;
-		Resources.vkDrawExtent.width = std::min(Resources.vkSwapchainExtent.width, Resources.vkDrawImage.imageExtent.width) * Resources.RenderScale;
-
-
-		// Transition our main draw image into general layout so we can write into it
-		// We will overwrite it all so we don't care about what was the older layout
-		TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-
-		DrawBackground(Resources.CurrentCMD);
-
-		TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-		TransitionImage(Resources.CurrentCMD, Resources.vkDepthImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-		// Begin a render pass connected to our draw image
-		VkRenderingAttachmentInfo colorAttachment = vkInit::AttachmentInfo(Resources.vkDrawImage.imageView, nullptr, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-		VkRenderingAttachmentInfo depthAttachment = vkInit::Depth_AttachmentInfo(Resources.vkDepthImage.imageView, VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL);
-
-		VkRenderingInfo renderInfo = vkInit::RenderingInfo(Resources.vkWindowExtent, &colorAttachment, &depthAttachment);
-
-		vkCmdBeginRendering(Resources.CurrentCMD, &renderInfo);
-		RenderImgui();
-	}
-
-	void EndRecording()
-	{
-		vkCmdEndRendering(Resources.CurrentCMD);
-
-		// Transition the draw image and the swapchain image into their correct transfer layouts
-		TransitionImage(Resources.CurrentCMD, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
-		TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-
-		// Execute a copy from the draw image into the swapchain
-		CopyImageToImage(Resources.CurrentCMD, Resources.vkDrawImage.image, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], Resources.vkDrawExtent, Resources.vkSwapchainExtent);
-
-		// Set swapchain image layout to Attachment Optimal so we can draw it
-		TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
-
-		// Draw imgui into the swapchain image
-		DrawImgui(Resources.CurrentCMD, Resources.vkSwapchainImageViews[Resources.CurrentSwapchainImageIndex]);
-
-		// Set swapchain image layout to Present so we can draw it
-		TransitionImage(Resources.CurrentCMD, Resources.vkSwapchainImages[Resources.CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
-
-		// Finalize the command buffer (we can no longer add commands, but it can now be executed)
-		VK_CHECK(vkEndCommandBuffer(Resources.CurrentCMD));
-
-		// COMMAND BUFFER RECORDING ENDED
-	}
-
-	void SubmitToQueue()
-	{
-		// Prepare the submission to the queue. 
-		// We want to wait on the vkPresentSemaphore, as that semaphore is signaled when the swapchain is ready
-		// We will signal the vkRenderSemaphore, to signal that rendering has finished
-
-		VkCommandBufferSubmitInfo cmdinfo = vkInit::CommandBuffer_SubmitInfo(Resources.CurrentCMD);
-
-		VkSemaphoreSubmitInfo waitInfo = vkInit::Semaphore_SubmitInfo(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, Resources.GetCurrentFrame().vkSwapchainSemaphore);
-		VkSemaphoreSubmitInfo signalInfo = vkInit::Semaphore_SubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, Resources.GetCurrentFrame().vkRenderSemaphore);
-
-		VkSubmitInfo2 submit = vkInit::SubmitInfo(&cmdinfo, &signalInfo, &waitInfo);
-
-		// Submit command buffer to the queue and execute it.
-		// vkRenderFence will now block until the graphic commands finish execution
-		VK_CHECK(vkQueueSubmit2(Resources.vkGraphicsQueue, 1, &submit, Resources.GetCurrentFrame().vkRenderFence));
-
-		// Prepare present
-		// This will put the image we just rendered to into the visible window.
-		// We want to wait on the vkRenderSemaphore for that, 
-		// As its necessary that drawing commands have finished before the image is displayed to the user
-		VkPresentInfoKHR presentInfo = {};
-		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-		presentInfo.pNext = nullptr;
-		presentInfo.pSwapchains = &Resources.vkSwapchain;
-		presentInfo.swapchainCount = 1;
-
-		presentInfo.pWaitSemaphores = &Resources.GetCurrentFrame().vkRenderSemaphore;
-		presentInfo.waitSemaphoreCount = 1;
-
-		presentInfo.pImageIndices = &Resources.CurrentSwapchainImageIndex;
-
-		VkResult e = vkQueuePresentKHR(Resources.vkGraphicsQueue, &presentInfo);
-		if (e == VK_ERROR_OUT_OF_DATE_KHR) {
-			Resources.bResizeNeeded = true;
-			return;
-		}
-		else
-		{
-			VK_CHECK(e);
-		}
-		// Increase the number of frames drawn
-		Resources.RenderFrameNumber++;
-	}
-
-	void DrawBackground(VkCommandBuffer cmd)
-	{
-		// Clear sceen
-		// VkClearColorValue clearValue;
-		// ClearValue = { { 0.0f, 0.0f, 0.0f, 1.0f } };
-		// VkImageSubresourceRange clearRange = vkInit::Image_SubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
-		// vkCmdClearColorImage(cmd, vkDrawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
-		
-		// Bind the gradient drawing compute pipeline
-		RenderPipeline gradientPipeline = MainRenderPipelineManager->GetEngineRenderPipeline(EngineRenderPipelines::GradientCompute);
-
-		// Bind the background compute pipeline
-		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipeline.Pipeline);
-
-		// Bind the descriptor set containing the draw image for the compute pipeline
-		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipeline.Layout, 0, 1, &Resources.vkDrawImageDescriptors, 0, nullptr);
-
-		Resources.BackgroundGradientData.data3.x = Resources.vkWindowExtent.width;
-		Resources.BackgroundGradientData.data3.y = Resources.vkWindowExtent.height;
-
-		vkCmdPushConstants(cmd, gradientPipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ExtraPushConstants), &Resources.BackgroundGradientData);
-		// Execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
-		vkCmdDispatch(cmd, std::ceil(Resources.vkDrawExtent.width / 16.0), std::ceil(Resources.vkDrawExtent.height / 16.0), 1);
-	}
-
-	void DrawImgui(VkCommandBuffer cmd, VkImageView targetImageView)
-	{
-		VkRenderingAttachmentInfo colorAttachment = vkInit::AttachmentInfo(targetImageView, nullptr, VK_IMAGE_LAYOUT_GENERAL);
-		VkRenderingInfo renderInfo = vkInit::RenderingInfo(Resources.vkSwapchainExtent, &colorAttachment, nullptr);
-
-		vkCmdBeginRendering(cmd, &renderInfo);
-		ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd);
-		vkCmdEndRendering(cmd);
-	}
-
-	void RenderImgui()
-	{
-		// Imgui new frame
-		ImGui_ImplVulkan_NewFrame();
-		ImGui_ImplSDL3_NewFrame();
-		ImGui::NewFrame();
-
-		if (ImGui::Begin("Rendering Settings")) {
-			ImGui::Text(std::format("FPS: {}", ImGui::GetIO().Framerate).c_str());
-			ImGui::Text(std::format("Entities simulated: {}", MainWorld->GetWorldEntityManager()->GetCurrentEntityCount()).c_str());
-			
-			ImGui::SliderFloat("Render Scale", &Resources.RenderScale, 0.3f, 1.f);
-			
-
-			ImGui::Text("Gradient settings");
-
-			ImGui::InputFloat4("Top", (float*)&Resources.BackgroundGradientData.data1);
-			ImGui::InputFloat4("Bottom", (float*)&Resources.BackgroundGradientData.data2);
-
-			ImGui::Text("Lighting settings");
-			ImGui::SliderFloat("Ambient light strength", &Resources.GlobalLightingData.ambientLightStrength, 0.0f, 1.0f);
-
-			ImGui::SliderFloat("Ambient light color R", &Resources.GlobalLightingData.ambientLightColor.r, 0.0f, 1.0f);
-			ImGui::SliderFloat("Ambient light color G", &Resources.GlobalLightingData.ambientLightColor.g, 0.0f, 1.0f);
-			ImGui::SliderFloat("Ambient light color B", &Resources.GlobalLightingData.ambientLightColor.b, 0.0f, 1.0f);
-
-			ImGui::SliderFloat("Directional light strength", &Resources.GlobalLightingData.directionalLightStrength, 0.0f, 1.0f);
-
-			ImGui::SliderFloat("Directional light direction X", &Resources.GlobalLightingData.directionalLightDir.x, -1.0f, 1.0f);
-			ImGui::SliderFloat("Directional light direction Y", &Resources.GlobalLightingData.directionalLightDir.y, -1.0f, 1.0f);
-			ImGui::SliderFloat("Directional light direction Z", &Resources.GlobalLightingData.directionalLightDir.z, -1.0f, 1.0f);
-
-			ImGui::SliderFloat("Directional light color R", &Resources.GlobalLightingData.directionalLightColor.r, 0.0f, 1.0f);
-			ImGui::SliderFloat("Directional light color G", &Resources.GlobalLightingData.directionalLightColor.g, 0.0f, 1.0f);
-			ImGui::SliderFloat("Directional light color B", &Resources.GlobalLightingData.directionalLightColor.b, 0.0f, 1.0f);
-
-		}
-
-		// Imgui UI to test
-		//ImGui::ShowDemoWindow();
-		ImGui::End();
-		// Make imgui calculate internal draw structures
-		ImGui::Render();
-	}
 
 private:
 
@@ -335,14 +115,25 @@ private:
 	{
 		vkb::InstanceBuilder builder;
 
-		// Make the vulkan instance, with basic debug features
-		auto inst_ret = builder.set_app_name("VulkanCore")
-			.request_validation_layers(bUseValidationLayers)
-			.use_default_debug_messenger()
-			.require_api_version(1, 3, 0)
-			.build();
+		// GPU validation features
+		VkValidationFeatureEnableEXT enable_features1 = { VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_EXT };
+		VkValidationFeatureEnableEXT enable_features2 = { VK_VALIDATION_FEATURE_ENABLE_GPU_ASSISTED_RESERVE_BINDING_SLOT_EXT };
 
-		vkb::Instance vkb_inst = inst_ret.value();
+		// Make the vulkan instance, with basic debug features
+		auto inst_ret = builder.set_app_name("VulkanCore");
+		inst_ret = inst_ret.request_validation_layers(Resources.ValidationLayersEnabled);
+		inst_ret = inst_ret.use_default_debug_messenger();
+		inst_ret = inst_ret.require_api_version(1, 3, 0);
+		inst_ret = inst_ret.desire_api_version(1, 3, 0);
+		if (Resources.GPUValidationLayersEnabled)
+		{
+			inst_ret = inst_ret.add_validation_feature_enable(enable_features1);
+			inst_ret = inst_ret.add_validation_feature_enable(enable_features2);
+		}
+
+		auto int_build = inst_ret.build();
+
+		vkb::Instance vkb_inst = int_build.value();
 
 		// Grab the instance 
 		Resources.vkInstance = vkb_inst.instance;
@@ -360,38 +151,114 @@ private:
 		VkPhysicalDeviceVulkan12Features features12{};
 		features12.bufferDeviceAddress = true;
 		features12.descriptorIndexing = true;
+		features12.shaderSampledImageArrayNonUniformIndexing = true;
+		features12.descriptorBindingSampledImageUpdateAfterBind = true;
+		features12.descriptorBindingPartiallyBound = true;
+		features12.descriptorBindingUpdateUnusedWhilePending = true;
+		features12.descriptorBindingVariableDescriptorCount = true;
+		features12.descriptorBindingStorageImageUpdateAfterBind = true;
+		features12.descriptorBindingUniformBufferUpdateAfterBind = true;
+		features12.descriptorBindingStorageBufferUpdateAfterBind = true;
+		// Enables use of runtimeDescriptorArrays in SPIR-V shaders.
+		features12.runtimeDescriptorArray = true; 
+
+		// Raytracing features
+		VkPhysicalDeviceAccelerationStructureFeaturesKHR asFeatures{};
+		asFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+		asFeatures.pNext = nullptr;
+		asFeatures.accelerationStructure = true;
+		asFeatures.descriptorBindingAccelerationStructureUpdateAfterBind = true;
+
+		VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtpFeatures{};
+		rtpFeatures.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+		rtpFeatures.pNext = nullptr;
+		rtpFeatures.rayTracingPipeline = true;
 
 		// Use vk-bootstrap to select a gpu. 
 		// We want a gpu that can write to the SDL surface and supports vulkan 1.3 with the correct features
 		vkb::PhysicalDeviceSelector selector{ vkb_inst };
-		vkb::PhysicalDevice physicalDevice = selector
-			.set_minimum_version(1, 3)
-			.set_required_features_13(features)
-			.set_required_features_12(features12)
-			.set_surface(Resources.vkSurface)
-			.required_device_memory_size(VkDeviceSize(4000000000))
-			.select()
-			.value();
-
+		
+		selector = selector.set_minimum_version(1, 3);
+		selector = selector.set_required_features_13(features);
+		selector = selector.set_required_features_12(features12);
+		selector = selector.set_surface(Resources.vkSurface);
+		// Ray tracing related extensions
+		selector = selector.add_required_extension(VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME);
+		selector = selector.add_required_extension(VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME);
+		// Required by VK_KHR_acceleration_structure
+		selector = selector.add_required_extension(VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME);
+		selector = selector.add_required_extension(VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+		selector = selector.add_required_extension(VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME);
+		// Required for VK_KHR_ray_tracing_pipeline
+		selector = selector.add_required_extension(VK_KHR_SPIRV_1_4_EXTENSION_NAME);
+		// Required by VK_KHR_spirv_1_4
+		selector = selector.add_required_extension(VK_KHR_SHADER_FLOAT_CONTROLS_EXTENSION_NAME);
+		selector = selector.add_required_extension_features(asFeatures);
+		selector = selector.add_required_extension_features(rtpFeatures);
+		selector = selector.required_device_memory_size(VkDeviceSize(4000000000));
+			
+		vkb::PhysicalDevice physicalDevice = selector.select().value();
+		std::vector<VkQueueFamilyProperties> queueFamilyProperties = physicalDevice.get_queue_families();
 
 		// Create the final vulkan device
 		vkb::DeviceBuilder deviceBuilder{ physicalDevice };
 
+		// Queue setup
+		std::vector<vkb::CustomQueueDescription> queue_descriptions;
+		for (uint32_t i = 0; i < queueFamilyProperties.size(); i++) {
+
+			bool graphicsBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) == static_cast<uint32_t>(VK_QUEUE_GRAPHICS_BIT);
+			bool computeBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_COMPUTE_BIT) == static_cast<uint32_t>(VK_QUEUE_COMPUTE_BIT);
+			bool transferBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_TRANSFER_BIT) == static_cast<uint32_t>(VK_QUEUE_TRANSFER_BIT);
+			bool sparseBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_SPARSE_BINDING_BIT) == static_cast<uint32_t>(VK_QUEUE_SPARSE_BINDING_BIT);
+			bool protectedBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_PROTECTED_BIT) == static_cast<uint32_t>(VK_QUEUE_PROTECTED_BIT);
+			bool videoDecodeBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_VIDEO_DECODE_BIT_KHR) == static_cast<uint32_t>(VK_QUEUE_VIDEO_DECODE_BIT_KHR);
+			bool videoEncodeBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_VIDEO_ENCODE_BIT_KHR) == static_cast<uint32_t>(VK_QUEUE_VIDEO_ENCODE_BIT_KHR);
+			bool opticalFlowBit = static_cast<uint32_t>(queueFamilyProperties[i].queueFlags & VK_QUEUE_OPTICAL_FLOW_BIT_NV) == static_cast<uint32_t>(VK_QUEUE_OPTICAL_FLOW_BIT_NV);
+
+			// Main Graphics Queue requirements
+			if (graphicsBit && computeBit && transferBit)
+			{
+				if (queueFamilyProperties[i].queueCount < 3)
+				{
+					fmt::println("ERROR: GPU does not support 3 graphics queues!");
+					abort();
+				}
+				queue_descriptions.emplace_back(i, std::vector<float>{ 1.0f , 1.0f, 0.5f});
+			}
+			// Transfer Queue requirements
+			else if (
+				transferBit &&
+				!graphicsBit && !computeBit && !videoDecodeBit && !videoEncodeBit && !opticalFlowBit)
+			{
+				queue_descriptions.emplace_back(i, std::vector<float>{ 1.0f });
+			}
+		}
+		deviceBuilder.custom_queue_setup(queue_descriptions);
+
+		
 		vkb::Device vkbDevice = deviceBuilder.build().value();
 
 		// Get the VkDevice handle used in the rest of a vulkan application
 		Resources.vkDevice = vkbDevice.device;
 		Resources.vkChosenGPU = physicalDevice.physical_device;
-
+		
 		// Use vk-bootstrap to get a Graphics queue
-		Resources.vkGraphicsQueue = vkbDevice.get_queue(vkb::QueueType::graphics).value();
 		Resources.vkGraphicsQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::graphics).value();
+		vkGetDeviceQueue(Resources.vkDevice, Resources.vkGraphicsQueueFamily, 0, &Resources.vkFrames[0].vkGraphicsQueue);
+		vkGetDeviceQueue(Resources.vkDevice, Resources.vkGraphicsQueueFamily, 0, &Resources.vkFrames[1].vkGraphicsQueue);
+		vkGetDeviceQueue(Resources.vkDevice, Resources.vkGraphicsQueueFamily, 2, &Resources.vkGraphicsSetupQueue);
+
+		// Use vk-bootstrap to get a Transfer queue
+		Resources.vkTransferQueue = vkbDevice.get_queue(vkb::QueueType::transfer).value();
+		Resources.vkTransferQueueFamily = vkbDevice.get_queue_index(vkb::QueueType::transfer).value();
+
+		Resources.DispatchTable = vkbDevice.make_table();
 	}
 
 	void InitAllocationHandler()
 	{
-		MainAllocationHandler = std::make_unique<AllocationHandler>();
-		MainAllocationHandler->InitAllocator(Resources.vkInstance, Resources.vkChosenGPU, Resources.vkDevice, Resources.vkGraphicsQueue, Resources.vkGraphicsQueueFamily);
+		MainAllocationHandler = std::make_unique<AllocationHandler>(&Resources, &RtResources);
 	}
 
 	void InitSubSystems()
@@ -399,13 +266,12 @@ private:
 		MainMeshLoader = std::make_unique<MeshLoader>(MainAllocationHandler.get());
 		MainTextureLoader = std::make_unique<TextureLoader>(MainAllocationHandler.get());
 		MainShaderLoader = std::make_unique<ShaderLoader>(MainAllocationHandler.get(), &Resources);
-		MainRenderPipelineManager = std::make_unique<RenderPipelineManager>(MainShaderLoader.get(), &Resources);
+		MainRenderPipelineManager = std::make_unique<RenderPipelineManager>(MainShaderLoader.get(), &Resources, &RtResources);
+		MainVulkanRaytracing = std::make_unique<VulkanRaytracing>(&Resources, &RtResources, MainAllocationHandler.get(), MainMeshLoader.get(), MainTextureLoader.get(), MainRenderPipelineManager.get());
 	}
 
-	void InitSwapchain()
+	void CreateDrawImages()
 	{
-		CreateSwapchain(Resources.vkWindowExtent.width, Resources.vkWindowExtent.height);
-
 		// Draw image size will match the window
 		VkExtent3D drawImageExtent = 
 		{
@@ -465,8 +331,11 @@ private:
 			});
 	}
 
-	void CreateSwapchain(uint32_t width, uint32_t height)
+	void CreateSwapchain()
 	{
+		uint32_t width = Resources.vkWindowExtent.width;
+		uint32_t height = Resources.vkWindowExtent.height;
+
 		vkb::SwapchainBuilder swapchainBuilder{ Resources.vkChosenGPU, Resources.vkDevice, Resources.vkSurface };
 
 		Resources.vkSwapchainImageFormat = VK_FORMAT_B8G8R8A8_UNORM;
@@ -477,12 +346,14 @@ private:
 			// Use vsync present mode
 			//.set_desired_present_mode(VK_PRESENT_MODE_FIFO_KHR)
 			// Use immediate mode
-			.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
+			//.set_desired_present_mode(VK_PRESENT_MODE_IMMEDIATE_KHR)
+			// Present the most recently updated image.
+			.set_desired_present_mode(VK_PRESENT_MODE_MAILBOX_KHR)
 			.set_desired_extent(width, height)
 			.add_image_usage_flags(VK_IMAGE_USAGE_TRANSFER_DST_BIT)
 			.build()
 			.value();
-
+		
 		Resources.vkSwapchainExtent = vkbSwapchain.extent;
 		// Store swapchain and its related images
 		Resources.vkSwapchain = vkbSwapchain.swapchain;
@@ -585,74 +456,8 @@ private:
 
 	void InitImgui()
 	{
-		// 1: Create descriptor pool for IMGUI
-		//  - the size of the pool is oversized, but it's copied from imgui demo itself.
-		VkDescriptorPoolSize pool_sizes[] = { { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1000 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1000 },
-			{ VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, 1000 },
-			{ VK_DESCRIPTOR_TYPE_STORAGE_BUFFER_DYNAMIC, 1000 },
-			{ VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT, 1000 } };
-
-		VkDescriptorPoolCreateInfo pool_info = {};
-		pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-		pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-		pool_info.maxSets = 1000;
-		pool_info.poolSizeCount = (uint32_t)std::size(pool_sizes);
-		pool_info.pPoolSizes = pool_sizes;
-
-		VkDescriptorPool imguiPool;
-		VK_CHECK(vkCreateDescriptorPool(Resources.vkDevice, &pool_info, nullptr, &imguiPool));
-
-		// 2: initialize imgui library
-		// This initializes the core structures of imgui
-		ImGui::CreateContext();
-
-		// This initializes imgui for SDL
-		ImGui_ImplSDL3_InitForVulkan(Resources.MainWindow->GetWindow());
-
-		VkPipelineRenderingCreateInfo dynamic_rendering_info = {};
-		dynamic_rendering_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
-		dynamic_rendering_info.pNext = 0;
-		dynamic_rendering_info.viewMask = 0;
-		dynamic_rendering_info.colorAttachmentCount = 1;
-		dynamic_rendering_info.pColorAttachmentFormats = &Resources.vkSwapchainImageFormat;
-		dynamic_rendering_info.depthAttachmentFormat = VK_FORMAT_UNDEFINED;
-		dynamic_rendering_info.stencilAttachmentFormat = VK_FORMAT_UNDEFINED;
-
-		
-		// This initializes imgui for Vulkan
-		ImGui_ImplVulkan_InitInfo init_info = {};
-		init_info.Instance = Resources.vkInstance;
-		init_info.PhysicalDevice = Resources.vkChosenGPU;
-		init_info.Device = Resources.vkDevice;
-		init_info.Queue = Resources.vkGraphicsQueue;
-		init_info.DescriptorPool = imguiPool;
-		init_info.MinImageCount = 3;
-		init_info.ImageCount = 3;
-		init_info.UseDynamicRendering = true;
-		init_info.PipelineRenderingCreateInfo = dynamic_rendering_info;
-
-		init_info.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
-
-		ImGui_ImplVulkan_Init(&init_info);
-		ImGui_ImplVulkan_CreateFontsTexture();
-
-		// Add the destroy the imgui created structures
-		MainDeletionQueue.push_back([=]() {
-			ImGui_ImplVulkan_DestroyFontsTexture();
-			vkDestroyDescriptorPool(Resources.vkDevice, imguiPool, nullptr);
-			ImGui_ImplVulkan_Shutdown();
-			});
-
-		Resources.MainWindow->SubscribeToEvents([&](SDL_Event e) {
-			ImGui_ImplSDL3_ProcessEvent(&e);
-			});
+		MainVulkanImgui = std::make_unique<VulkanImgui>(&Resources);
+		MainVulkanImgui->InitImgui(RtResources.EmProperties.minImportedHostPointerAlignment);
 	}
 	
 	void InitSamplers()
@@ -674,11 +479,239 @@ private:
 			});
 	}
 
+	void BuildRaytracingStructures()
+	{
+		MainVulkanRaytracing->CreateTextureSets();
+		MainVulkanRaytracing->CreateModelBufferInfos();
+		MainVulkanRaytracing->RecalculateBottomLevelAccelerationStructures();
+		MainVulkanRaytracing->CreateRtShaderBindingTable();
+		MainVulkanRaytracing->CreateRaytracingStorageImage();
+	}
+
+	bool CheckIfRenderingConditionsMet()
+	{
+		if (Resources.MainWindow->WasResized() || Resources.bResizeNeeded)
+		{
+			ResizeSwapChain();
+		}
+		if (Resources.MainWindow->IsMinimized())
+		{
+			return false;
+		}
+		return true;
+	}
+
+	void StopRenderingForcefully()
+	{
+		if (MainRenderThread.GetIsWorking())
+		{
+			FinishBarrier->arrive_and_wait();
+		}
+		MainRenderThread.ClearQueue();
+		vkDeviceWaitIdle(Resources.vkDevice);
+	}
+
+	void ResizeSwapChain()
+	{
+		vkDeviceWaitIdle(Resources.vkDevice);
+
+		DestroySwapchain();
+
+		Resources.vkWindowExtent.width = Resources.MainWindow->GetWidth();
+		Resources.vkWindowExtent.height = Resources.MainWindow->GetHeight();
+
+		CreateSwapchain();
+
+		MainVulkanRaytracing->ResizeRaytracingStorageImage();
+
+		Resources.bResizeNeeded = false;
+	}
+
+	void SetupCommandBuffer()
+	{
+		FrameData& currentFrame = Resources.GetCurrentFrame();
+
+		currentFrame.vkDeletionQueue.flush();
+		currentFrame.vkFrameDescriptors.ClearPools(Resources.vkDevice);
+
+		VK_CHECK(vkResetFences(Resources.vkDevice, 1, &currentFrame.vkRenderFence));
+
+		{
+			std::scoped_lock lock(SwapchainMutex);
+			// Request image from the swapchain
+			VkResult e = vkAcquireNextImageKHR(Resources.vkDevice, Resources.vkSwapchain, 1000000000, currentFrame.vkSwapchainSemaphore, nullptr, &currentFrame.CurrentSwapchainImageIndex);
+			if (e == VK_ERROR_OUT_OF_DATE_KHR) {
+				Resources.bResizeNeeded = true;
+				return;
+			}
+			VK_CHECK(e);
+		}
+		// Now that we are sure that the commands finished executing, we can safely reset the command buffer to begin recording again.
+		VK_CHECK(vkResetCommandBuffer(currentFrame.vkMainCommandBuffer, 0));
+
+		// Begin the command buffer recording. We will use this command buffer exactly once, so we want to let vulkan know that
+		VkCommandBufferBeginInfo cmdBeginInfo = vkInit::CommandBuffer_BeginInfo(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT);
+
+		// Start the command buffer recording
+		VK_CHECK(vkBeginCommandBuffer(currentFrame.vkMainCommandBuffer, &cmdBeginInfo));
+
+		// RECORDING TO COMMAND BUFFER
+	}
+
+	void RenderStart()
+	{
+		// Draw background
+		Resources.vkDrawExtent.height = std::min(Resources.vkSwapchainExtent.height, Resources.vkDrawImage.imageExtent.height) * Resources.RenderScale;
+		Resources.vkDrawExtent.width = std::min(Resources.vkSwapchainExtent.width, Resources.vkDrawImage.imageExtent.width) * Resources.RenderScale;
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+		DrawBackground(Resources.GetCurrentFrame().vkMainCommandBuffer);
+
+		// Copy background to raytracing result image
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, Resources.vkDrawImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, RtResources.RaytracedImage.image, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		CopyImageToImage(Resources.GetCurrentFrame().vkMainCommandBuffer, Resources.vkDrawImage.image, RtResources.RaytracedImage.image, Resources.vkSwapchainExtent, RtResources.RaytracedImageExtend);
+
+		// Transition raytracing result image to shader usage
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, RtResources.RaytracedImage.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_GENERAL);
+	}
+
+	void RenderEnd()
+	{
+		// Transition the draw image and the swapchain image into their correct transfer layouts
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, Resources.vkSwapchainImages[Resources.GetCurrentFrame().CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, RtResources.RaytracedImage.image, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
+		
+		// Execute a copy from the draw image into the swapchain
+		auto extent = RtResources.RaytracedImageExtend;
+		extent.width *= Resources.RenderScale;
+		extent.height *= Resources.RenderScale;
+		CopyImageToImage(Resources.GetCurrentFrame().vkMainCommandBuffer, RtResources.RaytracedImage.image, Resources.vkSwapchainImages[Resources.GetCurrentFrame().CurrentSwapchainImageIndex], extent, Resources.vkSwapchainExtent);
+	
+		// Transition swapchain image for imgui redering
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, Resources.vkSwapchainImages[Resources.GetCurrentFrame().CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+		RenderImgui();
+
+		// Set swapchain image layout to Present so we can draw it
+		TransitionImage(Resources.GetCurrentFrame().vkMainCommandBuffer, Resources.vkSwapchainImages[Resources.GetCurrentFrame().CurrentSwapchainImageIndex], VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
+
+		// Finalize the command buffer (we can no longer add commands, but it can now be executed)
+		VK_CHECK(vkEndCommandBuffer(Resources.GetCurrentFrame().vkMainCommandBuffer));
+
+		// COMMAND BUFFER RECORDING ENDED
+	}
+
+	void RenderImgui()
+	{
+		// Update debug panel
+		MainVulkanImgui->UpdateImgui(MainWorld->GetWorldEntityManager()->GetCurrentEntityCount());
+		// Draw imgui into the swapchain image
+		MainVulkanImgui->RenderImgui(Resources.GetCurrentFrame().vkMainCommandBuffer, Resources.vkSwapchainImageViews[Resources.GetCurrentFrame().CurrentSwapchainImageIndex]);
+	}
+
+	void SubmitToQueue()
+	{
+		FrameData& previousFrame = Resources.GetPreviousFrame();
+		FrameData& currentFrame = Resources.GetCurrentFrame();
+
+		// Wait until the gpu has finished rendering the previous frame. We do not want to render two frames at once.
+		FinishBarrier->arrive_and_wait();
+
+		MainRenderThread.AddTask(std::bind_front(&RenderCore::SubmitTask, this), currentFrame);
+		StartBarrier->arrive_and_wait();
+		
+		// Increase the number of frames drawn
+		Resources.RenderFrameNumber++;
+	}
+
+	void SubmitTask(FrameData& currentFrame)
+	{
+		// Prepare the submission to the queue. 
+		// We want to wait on the vkPresentSemaphore, as that semaphore is signaled when the swapchain is ready
+		// We will signal the vkRenderSemaphore, to signal that rendering has finished
+
+		VkCommandBufferSubmitInfo cmdinfo = vkInit::CommandBuffer_SubmitInfo(currentFrame.vkMainCommandBuffer);
+
+		VkSemaphoreSubmitInfo waitInfo = vkInit::Semaphore_SubmitInfo(VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT_KHR, currentFrame.vkSwapchainSemaphore);
+		VkSemaphoreSubmitInfo signalInfo = vkInit::Semaphore_SubmitInfo(VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT, currentFrame.vkRenderSemaphore);
+
+		VkSubmitInfo2 submit = vkInit::SubmitInfo(&cmdinfo, &signalInfo, &waitInfo);
+
+		// Submit command buffer to the queue and execute it.
+		// vkRenderFence will now block until the graphic commands finish execution
+		VK_CHECK(vkQueueSubmit2(currentFrame.vkGraphicsQueue, 1, &submit, currentFrame.vkRenderFence));
+
+		// Prepare present
+		// This will put the image we just rendered to into the visible window.
+		// We want to wait on the vkRenderSemaphore for that, 
+		// As its necessary that drawing commands have finished before the image is displayed to the user
+		VkPresentInfoKHR presentInfo = {};
+		presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+		presentInfo.pNext = nullptr;
+		presentInfo.pSwapchains = &Resources.vkSwapchain;
+		presentInfo.swapchainCount = 1;
+
+		presentInfo.pWaitSemaphores = &currentFrame.vkRenderSemaphore;
+		presentInfo.waitSemaphoreCount = 1;
+
+		presentInfo.pImageIndices = &currentFrame.CurrentSwapchainImageIndex;
+
+		{
+			std::scoped_lock lock(SwapchainMutex);
+			VkResult e = vkQueuePresentKHR(currentFrame.vkGraphicsQueue, &presentInfo);
+			if (e == VK_ERROR_OUT_OF_DATE_KHR) {
+				Resources.bResizeNeeded = true;
+				return;
+			}
+			else
+			{
+				VK_CHECK(e);
+			}
+		}
+
+		VK_CHECK(vkWaitForFences(Resources.vkDevice, 1, &currentFrame.vkRenderFence, true, 10000000000));
+
+	}
+
+	void DrawBackground(VkCommandBuffer cmd)
+	{
+		// Clear sceen
+		// VkClearColorValue clearValue;
+		// ClearValue = { { 0.0f, 0.0f, 0.0f, 1.0f } };
+		// VkImageSubresourceRange clearRange = vkInit::Image_SubresourceRange(VK_IMAGE_ASPECT_COLOR_BIT);
+		// vkCmdClearColorImage(cmd, vkDrawImage.image, VK_IMAGE_LAYOUT_GENERAL, &clearValue, 1, &clearRange);
+
+		// Bind the gradient drawing compute pipeline
+		RenderPipeline gradientPipeline = MainRenderPipelineManager->GetEngineRenderPipeline(EngineRenderPipelines::GradientCompute);
+
+		// Bind the background compute pipeline
+		vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipeline.Pipeline);
+
+		// Bind the descriptor set containing the draw image for the compute pipeline
+		vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_COMPUTE, gradientPipeline.Layout, 0, 1, &Resources.vkDrawImageDescriptors, 0, nullptr);
+
+		Resources.BackgroundGradientData.data3.x = Resources.vkWindowExtent.width * Resources.RenderScale;
+		Resources.BackgroundGradientData.data3.y = Resources.vkWindowExtent.height * Resources.RenderScale;
+
+		vkCmdPushConstants(cmd, gradientPipeline.Layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(ExtraPushConstants), &Resources.BackgroundGradientData);
+		// Execute the compute pipeline dispatch. We are using 16x16 workgroup size so we need to divide by it
+		vkCmdDispatch(cmd, std::ceil(Resources.vkDrawExtent.width / 16.0), std::ceil(Resources.vkDrawExtent.height / 16.0), 1);
+	}
+
+
+
 	void Cleanup()
 	{
+		StopSource.request_stop();
+		auto copyToken = StartBarrier->arrive();
+		auto finishToken = FinishBarrier->arrive();
+		MainRenderThread.Data->Thread.join();
+
 		// Make sure the gpu has stopped doing its things
 		vkDeviceWaitIdle(Resources.vkDevice);
+
 		MainDeletionQueue.flush();
+
+		MainVulkanImgui->Cleanup();
 
 		MainRenderPipelineManager->CleanEngineRenderPipelines();
 		MainShaderLoader->DestroyShaders();
@@ -694,7 +727,7 @@ private:
 			vkDestroySemaphore(Resources.vkDevice, Resources.vkFrames[i].vkSwapchainSemaphore, nullptr);
 			Resources.vkFrames[i].vkDeletionQueue.flush();
 		}
-
+		MainVulkanRaytracing->DeleteRaytracingStorageImage();
 		MainAllocationHandler->Cleanup();
 
 		DestroySwapchain();
@@ -705,10 +738,12 @@ private:
 		vkb::destroy_debug_utils_messenger(Resources.vkInstance, Resources.vkDebugMessenger);
 		vkDestroyInstance(Resources.vkInstance, nullptr);
 
-		ImGui_ImplSDL3_Shutdown();
-		ImGui::DestroyContext();
-		
+
+		delete MainRenderThread.Data;
+		delete StartBarrier;
+		delete FinishBarrier;
 	}
+
 
 	// Main Subsystems
 	std::unique_ptr<AllocationHandler> MainAllocationHandler;
@@ -716,8 +751,9 @@ private:
 	std::unique_ptr<TextureLoader> MainTextureLoader;
 	std::unique_ptr<ShaderLoader> MainShaderLoader;
 	std::unique_ptr<RenderPipelineManager> MainRenderPipelineManager;
+	std::unique_ptr<VulkanRaytracing> MainVulkanRaytracing;
+	std::unique_ptr<VulkanImgui> MainVulkanImgui;
 
-	bool bUseValidationLayers = true;
 
 	// Class specific
 	DeletionQueue MainDeletionQueue;
@@ -726,7 +762,16 @@ private:
 
 	// Sharable resources
 	RenderCoreResources Resources;
+	RaytracingResources RtResources;
 
+	std::vector<SystemID> RenderSystems;
+	std::vector<SystemID> RaytracingRenderSystems;
 
+	RenderThread MainRenderThread;
+	std::stop_source StopSource;
+	std::barrier<>* StartBarrier;
+	std::barrier<>* FinishBarrier;
+
+	std::mutex SwapchainMutex;
 };
 

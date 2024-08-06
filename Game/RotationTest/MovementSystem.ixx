@@ -32,7 +32,7 @@ export class MovementSystem : public System
 
 public:
 	MovementSystem() {}
-	~MovementSystem() override {}
+	~MovementSystem() {}
 
 protected:
 	void Init() override 
@@ -80,7 +80,7 @@ protected:
 
 private:
 
-	CameraComponent mainCamera = {};
+	CameraComponent mainCamera;
 	EntityType cameraType = -1;
 
 	WriteReadComponentStorage<TransformComponent> TransformComponents;

@@ -22,6 +22,7 @@ import <filesystem>;
 
 export enum class EngineMesh { Error = 0, Cube, Quad, Sphere, Torus };
 
+
 export class MeshLoader
 {
 	friend class RenderCore;
@@ -31,7 +32,7 @@ public:
 	MeshLoader(AllocationHandler* allocationHandler) : vkAllocationHandler(allocationHandler) 
 	{
 		std::wstring path = std::filesystem::current_path().native();
-		fmt::println(L"Initializing MeshLoader: Current working directory: {}", path);
+		//fmt::println(L"Initializing MeshLoader: Current working directory: {}", path);
 
 		InitPrimitives();
 	}
@@ -41,23 +42,23 @@ public:
 	{
 		if (PrimitivesList.size() == 0)
 		{
-			std::vector<size_t> meshIDs = LoadMeshesFromFile("Engine/Resources/Models/error.obj");
+			std::vector<size_t> meshIDs = LoadMeshesFromFile("Engine/Resources/Models/error.obj", "Engine/Resources/Models/error.obj");
 			CreateMeshBuffersToGPU(meshIDs);
 			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Error, static_cast<int>(meshIDs[0])));
 
-			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/cube.obj");
+			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/cube.obj", "Engine/Resources/Models/cube.obj");
 			CreateMeshBuffersToGPU(meshIDs);
 			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Cube, static_cast<int>(meshIDs[0])));
 
-			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/quad.obj");
+			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/quad.obj", "Engine/Resources/Models/quad.obj");
 			CreateMeshBuffersToGPU(meshIDs);
 			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Quad, static_cast<int>(meshIDs[0])));
 
-			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/sphere.obj");
+			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/sphere.obj", "Engine/Resources/Models/sphere.obj");
 			CreateMeshBuffersToGPU(meshIDs);
 			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Sphere, static_cast<int>(meshIDs[0])));
 
-			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/torus.obj");
+			meshIDs = LoadMeshesFromFile("Engine/Resources/Models/torus.obj", "Engine/Resources/Models/torus.obj");
 			CreateMeshBuffersToGPU(meshIDs);
 			PrimitivesList.emplace(std::pair<EngineMesh, int>(EngineMesh::Torus, static_cast<int>(meshIDs[0])));
 		}
@@ -95,9 +96,10 @@ public:
 		return static_cast<MeshID>(shape);
 	}
 
-	const Mesh* GetMeshData(MeshID id)
+	const Mesh* GetMesh(MeshID id)
 	{
-		return Meshes[id].Mesh.get();
+		return Meshes[id].MeshInfo.get();
+
 	}
 
 	GPUMeshBuffers* GetMeshBuffers(MeshID id)
@@ -105,13 +107,46 @@ public:
 		return Meshes[id].BufferInfo.get();
 	}
 
+	GPUMeshBuffers* GetRaytracingMeshBuffers(MeshID id)
+	{
+		return Meshes[id].BufferInfo.get();
+	}
+
+	MeshAllocatedData GetMeshAllocatedData(MeshID id)
+	{
+		const MeshDataStorage& mesh = Meshes[id];
+		MeshAllocatedData data =
+		{
+			.MeshInfo = mesh.MeshInfo.get(),
+			.BufferInfo = mesh.BufferInfo.get(),
+			.RaytracingBufferInfo = mesh.RaytracingBufferInfo.get()
+		};
+		return data;
+	}
+
+	std::vector<MeshAllocatedData> GetAllMeshAllocatedData()
+	{
+		std::vector<MeshAllocatedData> returnVec;
+		returnVec.reserve(Meshes.size());
+		for(const MeshDataStorage& mesh : Meshes)
+		{
+			MeshAllocatedData data =
+			{
+				.MeshInfo = mesh.MeshInfo.get(),
+				.BufferInfo = mesh.BufferInfo.get(),
+				.RaytracingBufferInfo = mesh.RaytracingBufferInfo.get()
+			};
+			returnVec.push_back(data);
+		}
+		return returnVec;
+	}
 
 protected:
 
 	std::vector<MeshID> LoadModelFromFile(std::string modelFileName)
 	{
 		std::string modelFilePath = ModelResourceFolder + modelFileName;
-		std::vector<MeshID>  meshIDs = LoadMeshesFromFile(modelFilePath);
+		std::vector<MeshID>  meshIDs = LoadMeshesFromFile(modelFilePath, modelFileName);
 		return meshIDs;
 	}
 
@@ -123,10 +158,10 @@ protected:
 	const Mesh* GetPrimitiveMesh(EngineMesh shape)
 	{
 		auto it = PrimitivesList.find(shape);
-		return Meshes[it->second].Mesh.get();
+		return Meshes[it->second].MeshInfo.get();
 	}
 
-	std::vector<size_t> LoadMeshesFromFile(std::string modelFilePath)
+	std::vector<size_t> LoadMeshesFromFile(std::string modelFilePath, std::string modelFileName)
 	{
 		std::vector<size_t> meshIDs;
 
@@ -139,15 +174,15 @@ protected:
 			{
 				Mesh* m = loadedMeshes[i];
 				MeshDataStorage meshData;
-				meshData.Mesh = std::make_unique<Mesh>();
-				meshData.Mesh.reset(m);
+				meshData.MeshInfo = std::make_unique<Mesh>();
+				meshData.MeshInfo.reset(m);
 
 				int meshID = static_cast<int>(Meshes.size());
 				meshIDs.push_back(meshID);
 				Meshes.emplace_back(std::move(meshData));
 
-				if (i == 0) { MeshList.emplace(std::pair<std::string, int>(modelFilePath, meshID)); }
-				else { MeshList.emplace(std::pair<std::string, int>((modelFilePath + "::" + std::to_string(i)), meshID)); }
+				if (i == 0) { MeshList.emplace(std::pair<std::string, int>(modelFileName, meshID)); }
+				else { MeshList.emplace(std::pair<std::string, int>((modelFileName + "::" + std::to_string(i)), meshID)); }
 			}
 		}
 		
@@ -258,17 +293,29 @@ private:
 	{
 		for (auto h : meshHandles)
 		{
-			GPUMeshBuffers bufferInfo = vkAllocationHandler->UploadMeshToGPU(Meshes[h].Mesh->vertices, Meshes[h].Mesh->indices);
+			GPUMeshBuffers bufferInfo = vkAllocationHandler->UploadMeshToGPU(Meshes[h].MeshInfo->vertices, Meshes[h].MeshInfo->indices);
+
+			//Create vertex position vector for raytracing
+			std::vector<VertexPos> raytracingMesh;
+			raytracingMesh.reserve(Meshes[h].MeshInfo->vertices.size());
+			for(const auto& v : Meshes[h].MeshInfo->vertices)
+			{
+				VertexPos nv = { glm::vec3(v.position.x, v.position.y, v.position.z) };
+				raytracingMesh.emplace_back(nv);
+			}
+
+			GPURaytracingMeshBuffer raytracingBufferInfo = vkAllocationHandler->UploadMeshForRaytracingToGPU(raytracingMesh, Meshes[h].MeshInfo->indices);
 			Meshes[h].BufferInfo = std::make_unique<GPUMeshBuffers>(bufferInfo);
+			Meshes[h].RaytracingBufferInfo = std::make_unique<GPURaytracingMeshBuffer>(raytracingBufferInfo);
 			Meshes[h].UploadedToGPU = true;
 		}
 	}
-	
 
 	struct MeshDataStorage
 	{
-		std::unique_ptr<Mesh> Mesh;
+		std::unique_ptr<Mesh> MeshInfo;
 		std::unique_ptr<GPUMeshBuffers> BufferInfo;
+		std::unique_ptr<GPURaytracingMeshBuffer> RaytracingBufferInfo;
 		bool UploadedToGPU = false;
 	};
 

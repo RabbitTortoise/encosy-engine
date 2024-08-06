@@ -352,9 +352,9 @@ public:
 			fmt::println("ERROR: Can't find type in EntityTypeMap: {}", entity, entityType);
 			return {};
 		}
+		std::scoped_lock storageLock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType));
 		const auto storage = storageIt->second.get();
 		auto componentStorage = storage->GetComponentStoragePointer<ComponentType>();
-		std::scoped_lock storageLock(*WorldSharedBetweenManagers->GetEntityStorageMutex(entityType));
 		const EntityComponentIndex index = storage->GetEntityComponentIndex(entity);
 		return WorldComponentManager->GetReadOnlyComponentFromStorageThreaded<ComponentType>(componentStorage, index);
 	}

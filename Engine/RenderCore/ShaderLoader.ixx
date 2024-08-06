@@ -15,8 +15,9 @@ import <array>;
 import <filesystem>;
 
 export enum class EngineComputeShaders	{ Gradient = 0 };
-export enum class EngineVertexShaders	{ Unlit = 1, Lit = 3 };
-export enum class EngineFragmentShaders { Unlit = 2, Lit = 4 };
+export enum class EngineVertexShaders	{ Default = 0};
+export enum class EngineFragmentShaders { Default = 0};
+export enum class EngineRaytracingShaders { RayGen = 0, RayClosestHit = 1, RayMiss = 2, RayShadow = 3 };
 
 export class ShaderLoader
 {
@@ -28,7 +29,7 @@ public:
 	ShaderLoader(AllocationHandler* allocationHandler, RenderCoreResources* resources) : Resources(resources), vkAllocationHandler(allocationHandler)
 	{
 		std::wstring path = std::filesystem::current_path().native();;
-		fmt::println(L"Initializing ShaderLoader: Current working directory: {}",  path);
+		//fmt::println(L"Initializing ShaderLoader: Current working directory: {}",  path);
 
 		InitEngineShaders();
 	}
@@ -88,20 +89,49 @@ public:
 		return nullptr;
 	}
 
+	VkShaderModule LoadRaytracingShaderModule(std::string shaderFileName)
+	{
+		auto it = RaytracingShaderList.find(shaderFileName);
+		if (it == RaytracingShaderList.end())
+		{
+			std::string pathName = ShaderResourceFolder + shaderFileName + ".spv";
+			VkShaderModule loadedModule = LoadShaderFromFile(pathName);
+			size_t index = LoadedRaytracingShaders.size() - 1;
+			RaytracingShaderList.insert(std::pair(shaderFileName, index));
+			return loadedModule;
+		}
+		return LoadedRaytracingShaders[it->second];
+	}
+
+	VkShaderModule GetRaytracingShaderModuleById(ShaderID shaderID)
+	{
+		if (shaderID < LoadedRaytracingShaders.size())
+		{
+			return LoadedRaytracingShaders[shaderID];
+		}
+		fmt::println("ERROR: Raytracing shader by given id was not found!");
+		return nullptr;
+	}
+
+
 protected:
 
 	void InitEngineShaders()
 	{
 		LoadShaderFromFile("Engine/Resources/Shaders/Gradient.comp.spv");
-		LoadShaderFromFile("Engine/Resources/Shaders/Unlit.vert.spv");
-		LoadShaderFromFile("Engine/Resources/Shaders/Unlit.frag.spv");
-		LoadShaderFromFile("Engine/Resources/Shaders/Lit.vert.spv");
-		LoadShaderFromFile("Engine/Resources/Shaders/Lit.frag.spv");
+		LoadRaytracingShaderFromFile("Engine/Resources/Shaders/RayGeneration.rgen.spv");
+		LoadRaytracingShaderFromFile("Engine/Resources/Shaders/ClosestHit.rchit.spv");
+		LoadRaytracingShaderFromFile("Engine/Resources/Shaders/Miss.rmiss.spv");
+		LoadRaytracingShaderFromFile("Engine/Resources/Shaders/RaytraceShadow.rmiss.spv");
 	}
 
 	void DestroyShaders()
 	{
 		for (auto sm : LoadedShaders)
+		{
+			vkDestroyShaderModule(Resources->vkDevice, sm, nullptr);
+		}
+		for (auto sm : LoadedRaytracingShaders)
 		{
 			vkDestroyShaderModule(Resources->vkDevice, sm, nullptr);
 		}
@@ -123,6 +153,22 @@ private:
 		}
 		return loadedShader;
 	}
+
+	VkShaderModule LoadRaytracingShaderFromFile(std::string shaderFilePath)
+	{
+		VkShaderModule loadedShader;
+		bool success = ReadShaderFile(shaderFilePath, Resources->vkDevice, &loadedShader);
+		if (!success)
+		{
+			fmt::println("ERROR: Loading Shader {} was not successful!", shaderFilePath);
+		}
+		else
+		{
+			LoadedRaytracingShaders.push_back(loadedShader);
+		}
+		return loadedShader;
+	}
+
 
 	bool ReadShaderFile(std::string filePath,
 		VkDevice device,
@@ -170,7 +216,9 @@ private:
 	}
 
 	std::vector<VkShaderModule> LoadedShaders;
+	std::vector<VkShaderModule> LoadedRaytracingShaders;
 	std::map<std::string, ShaderID> ShaderList;
+	std::map<std::string, ShaderID> RaytracingShaderList;
 
 	RenderCoreResources* Resources;
 	AllocationHandler* vkAllocationHandler;

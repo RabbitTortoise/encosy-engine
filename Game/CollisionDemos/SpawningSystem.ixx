@@ -73,6 +73,7 @@ protected:
 
 	void Update(const int thread, const double deltaTime) override
 	{
+		auto systemData = GetSystemData(&SpawningSystemDataComponent);
 		LastFrametimes[CurrentFrameTimeIndex] = deltaTime;
 		CurrentFrameTimeIndex++;
 		if (CurrentFrameTimeIndex == LastFrametimes.size()) { CurrentFrameTimeIndex = 0; }
@@ -82,10 +83,10 @@ protected:
 		if (LastSpawnTime > 1.0f) { LastSpawnTime = 1.0f; }
 		if (LastSpawnTime - SpawnInterval > 0.0f) { SpawnTimeLeft = true; } else { SpawnTimeLeft = false; }
 
-		if (averageFPS < 100.0f) { SpawningEnabled = false; }
+		if (averageFPS < systemData.minFPS) { SpawningEnabled = false; }
 		if (!SpawningEnabled)
 		{
-			if (averageFPS > 110.0f) { SpawningEnabled = true; }
+			if (averageFPS > systemData.resetFPS) { SpawningEnabled = true; }
 		}
 	}
 
@@ -99,7 +100,7 @@ protected:
 			
 			TransformComponent ltc = GetCurrentEntityComponent(thread, &TransformComponents);
 			LeaderComponent llc = GetCurrentEntityComponent(thread, &LeaderComponents);
-			MaterialComponentLit lmc = GetCurrentEntityComponent(thread, &MaterialComponents);
+			MaterialComponentRaytracing mcRay = GetCurrentEntityComponent(thread, &MaterialComponents);
 
 			std::uniform_real_distribution<float> distrX(systemData.PlayRegionMin.x, systemData.PlayRegionMax.x);
 			std::uniform_real_distribution<float> distrY(systemData.PlayRegionMin.y, systemData.PlayRegionMax.y);
@@ -114,12 +115,17 @@ protected:
 			newtc.Position.z += direction.z / 10.0f;
 			newtc.Scale = glm::vec3(Scale, Scale, Scale);
 
-			MaterialComponentLit newmat = { lmc.Diffuse, lmc.Normal, MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere), lmc.TextureRepeat, glm::vec3(1,1,1) };
 			ModelMatrixComponent newmatrix = {};
 			FollowerComponent newfc = { llc.LeaderID };
 			MovementComponent newmov = { {}, {Speed} };
-			SphereColliderComponent newsphere = { CollisionRadius };
-			CreateEntityWithData(FollowerType, newtc, newmat, newmatrix, newfc, newmov, newsphere);
+			SphereColliderComponent newsphere = SphereColliderComponent(CollisionRadius, false);
+
+			mcRay.TextureSet = llc.LeaderID;
+			mcRay.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere);
+			mcRay.TextureRepeat = mcRay.TextureRepeat;
+			mcRay.Color = glm::vec3(1, 1, 1);
+
+			CreateEntityWithData(FollowerType, newtc, mcRay, newmatrix, newfc, newmov, newsphere);
 		}
 	}
 
@@ -138,7 +144,7 @@ private:
 
 	ReadOnlyComponentStorage<TransformComponent> TransformComponents;
 	ReadOnlyComponentStorage<LeaderComponent> LeaderComponents;
-	ReadOnlyComponentStorage<MaterialComponentLit> MaterialComponents;
+	ReadOnlyComponentStorage<MaterialComponentRaytracing> MaterialComponents;
 
 	EntityType LeaderType;
 	EntityType FollowerType;
@@ -147,8 +153,8 @@ private:
 	bool SpawnTimeLeft = true;
 
 	float Speed = 6.0f;
-	float Scale = 3.5f;
-	float CollisionRadius = 1.01f;
+	float Scale = 3.0f;
+	float CollisionRadius = 0.51f;
 	float SpawnInterval = 0.02f;
 	float LastSpawnTime = 0.0f;
 	double averageFPS = 0.0;

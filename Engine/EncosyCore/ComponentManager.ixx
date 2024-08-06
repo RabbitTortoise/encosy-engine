@@ -242,10 +242,16 @@ protected:
 	template<typename ComponentType>
 	void ReplaceComponentData(const ComponentStorageLocator& locator, const size_t componentIndex, ComponentType&& component)
 	{
-		//Maybe needs a check if index is valid?
 		IComponentStorage* storageInterface = ComponentStorages.find(locator.ComponentType)->second[locator.ComponentStorageIndex].get();
 		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
-		storage->SetComponentData(componentIndex, std::move(component));
+		storage->SetComponentData(componentIndex, std::forward<decltype(std::move(component))>(std::move(component)));
+	}
+
+	template<typename ComponentType>
+	void ReplaceComponentData(IComponentStorage* storageInterface, const size_t componentIndex, ComponentType&& component)
+	{
+		auto storage = static_cast<ComponentTypeStorage<ComponentType>*>(storageInterface);
+		storage->SetComponentData(componentIndex, std::forward<decltype(std::move(component))>(std::move(component)));
 	}
 	
 	template<typename ComponentType>

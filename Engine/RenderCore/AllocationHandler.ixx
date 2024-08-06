@@ -3,9 +3,12 @@ module;
 #include <fmt/core.h>
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
+#include <VkBootstrapDispatch.h>
 
 #define VMA_IMPLEMENTATION
 #include <vma/vk_mem_alloc.h>
+
+#include "fmt/chrono.h"
 
 export module RenderCore.AllocationHandler;
 
@@ -14,6 +17,8 @@ import RenderCore.VulkanErrorLogger;
 import RenderCore.VulkanUtilities;
 import RenderCore.VulkanDescriptors;
 import RenderCore.VulkanTypes;
+import RenderCore.Resources;
+import RenderCore.RaytracingResources;
 
 import <string>;
 import <vector>;
@@ -21,26 +26,19 @@ import <span>;
 import <functional>;
 
 
+
 export class AllocationHandler
 {
 	friend class RenderCore;
 
 public:
-	AllocationHandler() {}
-	~AllocationHandler() { Cleanup(); }
-
-	void Cleanup()
+	AllocationHandler(RenderCoreResources* resources, RaytracingResources* rtResources)
 	{
-		HandlerDeletionQueue.flush();
-	}
-
-	void InitAllocator(VkInstance instance, VkPhysicalDevice gpu, VkDevice device, VkQueue queue, uint32_t queueFamily)
-	{
-		vkInstance = instance;
-		vkChosenGPU = gpu;
-		vkDevice = device;
-		vkGraphicsQueue = queue;
-		vkGraphicsQueueFamily = queueFamily;
+		CoreResources = resources;
+		RtResources = rtResources;
+		vkInstance = resources->vkInstance;
+		vkChosenGPU = resources->vkChosenGPU;
+		vkDevice = resources->vkDevice;
 
 		// Initialize the memory allocator
 		VmaAllocatorCreateInfo allocatorInfo = {};
@@ -48,16 +46,28 @@ public:
 		allocatorInfo.device = vkDevice;
 		allocatorInfo.instance = vkInstance;
 		allocatorInfo.flags = VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+		VmaVulkanFunctions vma_vulkan_func{};
+		vma_vulkan_func.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+		vma_vulkan_func.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
+
+		allocatorInfo.pVulkanFunctions = &vma_vulkan_func;
 		vmaCreateAllocator(&allocatorInfo, &vmaAllocator);
 
 		HandlerDeletionQueue.push_back([&]() {
 			vmaDestroyAllocator(vmaAllocator);
 			});
 	}
+	~AllocationHandler() { Cleanup(); }
+
+	void Cleanup()
+	{
+		HandlerDeletionQueue.flush();
+	}
 
 	void InitImmediateCommandPool()
 	{
-		VkCommandPoolCreateInfo commandPoolInfo = vkInit::CommandPool_CreateInfo(vkGraphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
+		VkCommandPoolCreateInfo commandPoolInfo = vkInit::CommandPool_CreateInfo(CoreResources->vkGraphicsQueueFamily, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT);
 		
 		VK_CHECK(vkCreateCommandPool(vkDevice, &commandPoolInfo, nullptr, &vkImmediateCommandPool));
 
@@ -98,14 +108,14 @@ public:
 
 		// Submit command buffer to the queue and execute it.
 		// vkImmediateFence will now block until the graphic commands finish execution
-		VK_CHECK(vkQueueSubmit2(vkGraphicsQueue, 1, &submit, vkImmediateFence));
+			VK_CHECK(vkQueueSubmit2(CoreResources->GetCurrentFrame().vkGraphicsQueue, 1, &submit, vkImmediateFence));
 
 		VK_CHECK(vkWaitForFences(vkDevice, 1, &vkImmediateFence, true, 9999999999));
 	}
 
 	// This assumes that Smart Access Memory / Resizable BAR is enabled!
 	// No staging buffer is used as rebar should be enabled.
-	AllocatedBuffer CreateGPUBuffer(size_t allocSize, VkBufferUsageFlags usage)
+	AllocatedBuffer CreateGPUBuffer(size_t allocSize, VkBufferUsageFlags usage, bool addToDeletionQueue = false)
 	{
 		// Allocate buffer
 		VkBufferCreateInfo bufferInfo = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
@@ -128,6 +138,62 @@ public:
 			&newBuffer.allocation,
 			&newBuffer.info));
 
+		if (addToDeletionQueue)
+		{
+			HandlerDeletionQueue.push_back([=]() {
+				DestroyBuffer(newBuffer);
+				});
+		}
+
+		return newBuffer;
+	}
+
+	AllocatedBuffer CreateGPUBufferWithAlignment(size_t allocSize, VkBufferUsageFlags usage, VkDeviceSize minAlignment, bool addToDeletionQueue = false)
+	{
+		// Allocate buffer
+		VkBufferCreateInfo bufferInfo = { .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO };
+		bufferInfo.pNext = nullptr;
+		bufferInfo.size = allocSize;
+
+		bufferInfo.usage = usage;
+
+		VmaAllocationCreateInfo vmaallocInfo = {};
+		vmaallocInfo.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE;
+		vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+		vmaallocInfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		AllocatedBuffer newBuffer;
+
+		// Allocate the buffer
+		VK_CHECK(vmaCreateBufferWithAlignment(vmaAllocator,
+			&bufferInfo,
+			&vmaallocInfo,
+			minAlignment,
+			&newBuffer.buffer,
+			&newBuffer.allocation,
+			&newBuffer.info));
+
+		if (addToDeletionQueue)
+		{
+			HandlerDeletionQueue.push_back([=]() {
+				DestroyBuffer(newBuffer);
+				});
+		}
+
+		return newBuffer;
+	}
+
+	// This assumes that Smart Access Memory / Resizable BAR is enabled!
+	// No staging buffer is used as rebar should be enabled.
+	AllocatedBuffer CreateAndPopulateGPUBuffer(size_t allocSize, const void* data, VkBufferUsageFlags usage, bool addToDeletionQueue = false)
+	{
+		// Create index buffer
+		AllocatedBuffer newBuffer = CreateGPUBuffer(allocSize, usage, addToDeletionQueue);
+
+		void* newBufferData = newBuffer.allocation->GetMappedData();
+
+		// Copy vertex buffer
+		memcpy(newBufferData, data, allocSize);
+
 		return newBuffer;
 	}
 
@@ -145,13 +211,13 @@ public:
 		vmaallocInfo.flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
 		AllocatedBuffer newBuffer;
 
-		// Allocate the buffer
-		VK_CHECK(vmaCreateBuffer(vmaAllocator,
-			&bufferInfo,
-			&vmaallocInfo,
-			&newBuffer.buffer,
-			&newBuffer.allocation,
-			&newBuffer.info));
+			// Allocate the buffer
+			VK_CHECK(vmaCreateBuffer(vmaAllocator,
+				&bufferInfo,
+				&vmaallocInfo,
+				&newBuffer.buffer,
+				&newBuffer.allocation,
+				&newBuffer.info));
 
 		return newBuffer;
 	}
@@ -164,7 +230,7 @@ public:
 	template <class T>
 	void WriteToBuffer(AllocatedBuffer& buffer, T* dataToWrite)
 	{
-		T* data = (T*)buffer.allocation->GetMappedData();
+		T* data = static_cast<T*>(buffer.allocation->GetMappedData());
 		*data = *dataToWrite;
 	}
 
@@ -192,7 +258,7 @@ public:
 
 	// This assumes that Smart Access Memory / Resizable BAR is enabled!
 	// No staging buffer is used as rebar should be enabled.
-	GPUMeshBuffers UploadMeshToGPU(std::span<Vertex> vertices, std::span<uint32_t> indices)
+	GPUMeshBuffers UploadMeshToGPU(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
 	{
 
 		const size_t vertexBufferSize = vertices.size() * sizeof(Vertex);
@@ -205,11 +271,15 @@ public:
 			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT);
 
 		// Find the address of the vertex buffer
-		VkBufferDeviceAddressInfo deviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newSurface.vertexBuffer.buffer };
-		newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(vkDevice, &deviceAdressInfo);
+		VkBufferDeviceAddressInfo vertexDeviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newSurface.vertexBuffer.buffer };
+		newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(vkDevice, &vertexDeviceAdressInfo);
 
 		// Create index buffer
-		newSurface.indexBuffer = CreateGPUBuffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT);
+		newSurface.indexBuffer = CreateGPUBuffer(indexBufferSize, VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT);
+
+		// Find the address of the vertex buffer
+		VkBufferDeviceAddressInfo indexDeviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newSurface.indexBuffer.buffer };
+		newSurface.indexBufferAddress = vkGetBufferDeviceAddress(vkDevice, &indexDeviceAdressInfo);
 
 		void* vertexData = newSurface.vertexBuffer.allocation->GetMappedData();
 		void* indexData = newSurface.indexBuffer.allocation->GetMappedData();
@@ -218,6 +288,74 @@ public:
 		memcpy(vertexData, vertices.data(), vertexBufferSize);
 		// Copy index buffer
 		memcpy(indexData , indices.data(), indexBufferSize);
+
+		HandlerDeletionQueue.push_back([=]() {
+			DestroyBuffer(newSurface.indexBuffer);
+			DestroyBuffer(newSurface.vertexBuffer);
+			});
+
+		return newSurface;
+	}
+
+	// This assumes that Smart Access Memory / Resizable BAR is enabled!
+	// No staging buffer is used as rebar should be enabled.
+	GPURaytracingMeshBuffer UploadMeshForRaytracingToGPU(const std::vector<VertexPos>& vertices, const std::vector<uint32_t>& indices)
+	{
+		const size_t vertexBufferSize = vertices.size() * sizeof(VertexPos);
+		const size_t indexBufferSize = indices.size() * sizeof(uint32_t);
+
+		GPURaytracingMeshBuffer newSurface;
+
+		// Create vertex buffer
+		newSurface.vertexBuffer = CreateGPUBuffer(vertexBufferSize,
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR);
+
+		// Find the address of the vertex buffer
+		VkBufferDeviceAddressInfo vertexDeviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newSurface.vertexBuffer.buffer };
+		newSurface.vertexBufferAddress = vkGetBufferDeviceAddress(vkDevice, &vertexDeviceAdressInfo);
+
+		// Create index buffer
+		newSurface.indexBuffer = CreateGPUBuffer(indexBufferSize, 
+			VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT |
+			VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+			VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR);
+
+		// Find the address of the vertex buffer
+		VkBufferDeviceAddressInfo indexDeviceAdressInfo{ .sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,.buffer = newSurface.indexBuffer.buffer };
+		newSurface.indexBufferAddress = vkGetBufferDeviceAddress(vkDevice, &indexDeviceAdressInfo);
+
+		void* vertexData = newSurface.vertexBuffer.allocation->GetMappedData();
+		void* indexData = newSurface.indexBuffer.allocation->GetMappedData();
+
+		// Copy vertex buffer
+		memcpy(vertexData, vertices.data(), vertexBufferSize);
+		// Copy index buffer
+		memcpy(indexData, indices.data(), indexBufferSize);
+
+		// Build raytracing acceleration structure
+		uint32_t maxPrimitiveCount = indices.size() / 3;
+
+		VkAccelerationStructureGeometryKHR geometry{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR };
+		geometry.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+		geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+		geometry.geometry.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+		geometry.geometry.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+		geometry.geometry.triangles.vertexData.deviceAddress = newSurface.vertexBufferAddress;
+		geometry.geometry.triangles.vertexStride = sizeof(VertexPos);
+		geometry.geometry.triangles.maxVertex = vertices.size() - 1;
+		geometry.geometry.triangles.indexType = VK_INDEX_TYPE_UINT32;
+		geometry.geometry.triangles.indexData.deviceAddress = newSurface.indexBufferAddress;
+
+		VkAccelerationStructureBuildRangeInfoKHR buildRangeInfo{ };
+		buildRangeInfo.firstVertex = 0;
+		buildRangeInfo.primitiveCount = maxPrimitiveCount;
+		buildRangeInfo.primitiveOffset = 0;
+		buildRangeInfo.transformOffset = 0;
+
+		newSurface.accelerationStructureGeometry = geometry;
+		newSurface.accelerationStructureBuildRangeInfo = buildRangeInfo;
 
 		HandlerDeletionQueue.push_back([=]() {
 			DestroyBuffer(newSurface.indexBuffer);
@@ -240,7 +378,7 @@ public:
 
 	// This assumes that Smart Access Memory / Resizable BAR is enabled!
 	// No staging buffer is used as rebar should be enabled.
-	AllocatedImage AllocateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped)
+	AllocatedImage AllocateImage(VkExtent3D size, VkFormat format, VkImageUsageFlags usage, bool mipmapped, bool addToDeletionQueue = true)
 	{
 		AllocatedImage newImage;
 		newImage.imageFormat = format;
@@ -271,15 +409,16 @@ public:
 
 		VK_CHECK(vkCreateImageView(vkDevice, &view_info, nullptr, &newImage.imageView));
 
-
-		HandlerDeletionQueue.push_back([=]() {
+		if(addToDeletionQueue)
+		{
+			HandlerDeletionQueue.push_back([=]() {
 			vkDestroyImageView(vkDevice, newImage.imageView, nullptr);
 			vmaDestroyImage(vmaAllocator, newImage.image, newImage.allocation);
 			});
-		
+		}
+
 		return newImage;
 	}
-
 
 	// This assumes that Smart Access Memory / Resizable BAR is enabled!
 	// No staging buffer is used as rebar should be enabled.
@@ -323,15 +462,97 @@ public:
 		vmaDestroyImage(vmaAllocator, img.image, img.allocation);
 	}
 
+	void CreateAccelerationStructure(const VkAccelerationStructureCreateInfoKHR& asCreateInfo, VkAccelerationStructureKHR& accelerationStructure, bool addToDeletionQueue = false)
+	{
+		CoreResources->DispatchTable.fp_vkCreateAccelerationStructureKHR(CoreResources->vkDevice, &asCreateInfo, nullptr, &accelerationStructure);
+
+		if (addToDeletionQueue)
+		{
+			HandlerDeletionQueue.push_back([=]() {
+				CoreResources->DispatchTable.fp_vkDestroyAccelerationStructureKHR(vkDevice, accelerationStructure, nullptr);
+				});
+		}
+	}
+
+	void BuildAccelerationStructure(
+		const VkAccelerationStructureBuildGeometryInfoKHR& asInfo, 
+		VkAccelerationStructureBuildRangeInfoKHR* blas_ranges[],
+		VkQueryPool& queryPool
+	)
+	{
+		ImmediateSubmit([&](VkCommandBuffer cmd) 
+		{
+			vkCmdResetQueryPool(cmd, queryPool, 0, 1);
+			CoreResources->DispatchTable.fp_vkCmdBuildAccelerationStructuresKHR(cmd, 1, &asInfo, blas_ranges);
+
+		});
+		ImmediateSubmit([&](VkCommandBuffer cmd)
+		{
+			CoreResources->DispatchTable.fp_vkCmdWriteAccelerationStructuresPropertiesKHR(cmd, 1, &asInfo.dstAccelerationStructure,
+			VK_QUERY_TYPE_ACCELERATION_STRUCTURE_COMPACTED_SIZE_KHR, queryPool, 0);
+		});
+		
+	}
+
+	void CopyAccelerationStructure(VkAccelerationStructureKHR& src, VkAccelerationStructureKHR& dest, bool deleteSrc = false)
+	{
+		VkCopyAccelerationStructureInfoKHR copyInfo{ VK_STRUCTURE_TYPE_COPY_ACCELERATION_STRUCTURE_INFO_KHR };
+		copyInfo.src = src;
+		copyInfo.dst = dest;
+		copyInfo.mode = VK_COPY_ACCELERATION_STRUCTURE_MODE_COMPACT_KHR;
+		ImmediateSubmit([&](VkCommandBuffer cmd)
+		{
+				CoreResources->DispatchTable.fp_vkCmdCopyAccelerationStructureKHR(cmd, &copyInfo);
+		});
+		if (deleteSrc)
+		{
+			CoreResources->DispatchTable.fp_vkDestroyAccelerationStructureKHR(vkDevice, src, nullptr);
+		}
+	}
+
+	void CopyRtHandleData(const AllocatedBuffer& rtSBTBuffer, std::vector<uint8_t>& handles, const uint32_t& handleSize,
+		VkStridedDeviceAddressRegionKHR& raygenRegion, 
+		VkStridedDeviceAddressRegionKHR& MissRegion, uint32_t& missCount,
+		VkStridedDeviceAddressRegionKHR& HitRegion, uint32_t& hitCount)
+	{
+		// Helper to retrieve the handle data
+		auto getHandle = [&](int i) { return handles.data() + i * handleSize; };
+
+		// Map the SBT buffer and write in the handles.
+		auto* pSBTBuffer = reinterpret_cast<uint8_t*>(rtSBTBuffer.allocation->GetMappedData());
+		uint8_t* pData{ nullptr };
+		uint32_t handleIdx{ 0 };
+
+		// Raygen
+		pData = pSBTBuffer;
+		memcpy(pData, getHandle(handleIdx++), handleSize);
+
+		// Miss
+		pData = pSBTBuffer + raygenRegion.size;
+		for (uint32_t c = 0; c < missCount; c++)
+		{
+			memcpy(pData, getHandle(handleIdx++), handleSize);
+			pData += MissRegion.stride;
+		}
+
+		// Hit
+		pData = pSBTBuffer + raygenRegion.size + MissRegion.size;
+		for (uint32_t c = 0; c < hitCount; c++)
+		{
+			memcpy(pData, getHandle(handleIdx++), handleSize);
+			pData += HitRegion.stride;
+		}
+	}
+
 private:
+	RenderCoreResources* CoreResources;
+	RaytracingResources* RtResources;
 	VmaAllocator vmaAllocator;
 
 	// Needed vulkan handles
 	VkInstance vkInstance;
 	VkPhysicalDevice vkChosenGPU;
 	VkDevice vkDevice;
-	VkQueue vkGraphicsQueue;
-	uint32_t vkGraphicsQueueFamily;
 
 	// Immediate submit structures
 	VkFence vkImmediateFence;

@@ -2,6 +2,7 @@ module;
 #include <vulkan/vulkan.h>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
+#include <VkBootstrapDispatch.h>
 
 export module RenderCore.Resources;
 
@@ -13,6 +14,7 @@ export import RenderCore.VulkanDescriptors;
 
 export import <vector>;
 export import <array>;
+export import <mutex>;
 
 
 
@@ -21,6 +23,8 @@ export constexpr unsigned int FRAME_OVERLAP = 2;
 
 export struct FrameData
 {
+	//bool RaytracingEnabled = true;
+
 	VkSemaphore vkSwapchainSemaphore, vkRenderSemaphore;
 	VkFence vkRenderFence;
 
@@ -29,10 +33,17 @@ export struct FrameData
 
 	DeletionQueue vkDeletionQueue;
 	DescriptorAllocatorGrowable vkFrameDescriptors;
+
+	VkAccelerationStructureKHR TopLevelAccelerationStructure;
+
+	VkQueue vkGraphicsQueue; // For graphics commands
+	uint32_t CurrentSwapchainImageIndex;
 };
 
 export struct RenderCoreResources
 {
+	bool ValidationLayersEnabled = false;
+	bool GPUValidationLayersEnabled = false;
 
 	// Main handles
 	VkInstance vkInstance; // Vulkan library handle
@@ -40,8 +51,10 @@ export struct RenderCoreResources
 	VkPhysicalDevice vkChosenGPU; // GPU chosen as the default device
 	VkDevice vkDevice; // Vulkan device for commands
 	VkSurfaceKHR vkSurface; // Vulkan window surface
-	VkQueue vkGraphicsQueue; // 
-	uint32_t vkGraphicsQueueFamily; //
+	VkQueue vkGraphicsSetupQueue; // For graphics commands
+	VkQueue vkTransferQueue; // For transfer operations
+	uint32_t vkGraphicsQueueFamily;
+	uint32_t vkTransferQueueFamily;
 
 	// Render window resources
 	VkExtent2D vkWindowExtent = { 1920 , 1080 };
@@ -60,8 +73,9 @@ export struct RenderCoreResources
 	VkExtent2D vkSwapchainExtent; //
 	FrameData vkFrames[FRAME_OVERLAP];
 		
-	unsigned int RenderFrameNumber = 0;
+	unsigned int RenderFrameNumber = 2; // Trick to ensure GetPreviousFrame does not try to get negative frame.
 	FrameData& GetCurrentFrame() { return vkFrames[RenderFrameNumber % FRAME_OVERLAP]; };
+	FrameData& GetPreviousFrame() { return vkFrames[(RenderFrameNumber-1) % FRAME_OVERLAP]; };
 
 	// Draw image resources
 	AllocatedImage vkDrawImage;
@@ -70,17 +84,13 @@ export struct RenderCoreResources
 	VkDescriptorSet vkDrawImageDescriptors;
 	VkDescriptorSetLayout vkDrawImageDescriptorLayout;
 
-	// Ongoing render handles
-	VkCommandBuffer CurrentCMD;
-	uint32_t CurrentSwapchainImageIndex;
-
 	// Gradient pipeline resources
 	VkPipeline vkGradientPipeline;
 	VkPipelineLayout vkGradientPipelineLayout;
 	ExtraPushConstants BackgroundGradientData =
 	{
-		glm::vec4(0.2f, 0.2f, 0.6f, 1),
-		glm::vec4(0.025f, 0.0f, 0.025f, 1),
+		glm::vec4(0.4f, 0.6f, 0.9f, 1),
+		glm::vec4(0.088f, 0.133f, 0.2f, 1),
 		glm::vec4(0.0f, 0.0f, 0.0f, 1),
 		glm::vec4(0.0f, 0.0f, 0.0f, 1)
 	};
@@ -93,10 +103,12 @@ export struct RenderCoreResources
 	LitLightingData GlobalLightingData =
 	{
 		.ambientLightColor = glm::vec3(1.0f, 1.0f, 1.0f),
-		.ambientLightStrength = 0.1f,
-		.directionalLightDir = glm::vec3(-0.5f, -1.0f, -0.5f),
+		.ambientLightStrength = 0.0f,
+		.directionalLightDir = glm::vec3(-0.5f, -0.75f, 1.0f),
 		.directionalLightStrength = 1.0f,
 		.directionalLightColor = glm::vec3(1.0f, 1.0f, 1.0f),
 	};
 
+	// Extensions
+	vkb::DispatchTable DispatchTable;
 };

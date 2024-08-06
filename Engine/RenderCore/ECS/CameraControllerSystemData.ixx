@@ -14,6 +14,9 @@ export struct CameraControllerSystemData
 	WindowInstance* MainWindow;
 
 	//Debug Camera Movement
-	float Yaw = -90;
-	float Pitch = 0;
+	float CurrentYaw = -90;
+	float CurrentPitch = 0;
+
+	float DesiredYaw = -90;
+	float DesiredPitch = 0;
 };

@@ -174,6 +174,19 @@ protected:
 		return WorldEntityManager->GetEntityTypeInfo(entityTypeName);
 	}
 
+
+	// TODO: Investigate why this function is not working properly
+	/*template <typename ComponentType>
+	bool SetEntityComponent(Entity entity, EntityType entityType, ComponentType&& component)
+	{
+		if (!AllowPotentiallyUnsafeEdits)
+		{
+			fmt::println("ERROR: SetEntityComponent(): This function is currently available only when AllowPotentiallyUnsafeEdits is set to true.");
+		}
+		return WorldEntityManager->ReplaceEntityComponentData(entity, entityType, std::forward<decltype(std::move(component))>(std::move(component)));
+	}*/
+
+
 	template<typename...ComponentTypes>
 	Entity CreateEntityWithData(const EntityType entityType, ComponentTypes&&... components)
 	{
@@ -277,6 +290,7 @@ private:
 	{
 		ThreadDataOffsets = std::vector(ThreadCount, std::vector<DataOffsets>());
 		ThreadEntityInfo = std::vector(ThreadCount, std::vector<ThreadEntityAccessInfo>());
+		ThreadEntitiesCount = std::vector(ThreadCount, size_t(0));
 		ThreadCopyFunctions = std::vector(ThreadCount, std::vector<std::function<void()>>());
 	}
 	 
@@ -305,6 +319,14 @@ private:
 		FetchedEntitiesInfo = WorldEntityManager->GetEntityFetchInfo(MatchingEntityTypes);
 		CalculateThreadAccessOffsets();
 		FetchRequiredSpans();
+
+		for (int thread = 0; thread < ThreadCount; thread++)
+		{
+			for (const auto& entitiesInfo : ThreadEntityInfo[thread])
+			{
+				ThreadEntitiesCount[thread] += entitiesInfo.EntityCount;
+			}
+		}
 
 		if (ThreadedUpdateCalls)
 		{
@@ -472,6 +494,10 @@ private:
 		{
 			threadEntityInfo.clear();
 		}
+		for (auto& count : ThreadEntitiesCount)
+		{
+			count = 0;
+		}
 
 		size_t entityCount = 0;
 		for (const auto& info : FetchedEntitiesInfo)
@@ -612,6 +638,12 @@ private:
 
 protected:
 	int GetThreadCount() const { return ThreadCount; }
+	size_t GetThreadEntitiesCount(int thread) const 
+	{
+		return ThreadEntitiesCount[thread]; 
+	}
+
+	SystemThreadInfo GetThreadRuntimeInfo(int thread) { return RuntimeThreadInfo[thread]; }
 
 private:
 	ThreadedTaskRunner* ThreadRunner = nullptr;
@@ -621,6 +653,7 @@ private:
 	int ThreadCount = 1;
 
 	std::vector<std::vector<DataOffsets>> ThreadDataOffsets;
+	std::vector<size_t> ThreadEntitiesCount;
 	std::vector<std::vector<ThreadEntityAccessInfo>> ThreadEntityInfo;
 	std::vector<std::vector<std::function<void()>>> ThreadCopyFunctions;
 	std::vector<std::function<void()>> ThreadSaveFunctions;

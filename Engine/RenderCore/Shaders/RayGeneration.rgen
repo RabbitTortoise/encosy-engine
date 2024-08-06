@@ -1,0 +1,48 @@
+#version 460
+#extension GL_EXT_ray_tracing : enable
+#extension GL_EXT_buffer_reference2 : require
+#extension GL_EXT_scalar_block_layout : enable
+
+// Data layouts
+// Hit payload layout
+struct hitPayload
+{
+  vec4 hitValue;
+};
+
+// Sets and bindings
+layout(set = 0, binding = 0, rgba8) uniform image2D image;
+layout(set = 1, binding = 0) uniform accelerationStructureEXT topLevelAS;
+layout(set = 1, binding = 1) uniform CameraProperties
+{
+	mat4 viewInverse;
+	mat4 projInverse;
+	vec4 cameraPosition;
+} CameraData;
+
+// Data passed between shaders
+layout(location = 0) rayPayloadEXT hitPayload prd;
+
+void main() 
+{
+	const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+	const vec2 inUV = pixelCenter/vec2(gl_LaunchSizeEXT.xy);
+	vec2 d = inUV * 2.0 - 1.0;
+
+	vec4 origin = CameraData.viewInverse * vec4(0,0,0,1);
+	vec4 target = CameraData.projInverse * vec4(d.x, d.y, 1, 1) ;
+	vec4 direction = CameraData.viewInverse*vec4(normalize(target.xyz), 0) ;
+
+	uint  rayFlags = gl_RayFlagsOpaqueEXT;
+	float tmin = 0.001;
+	float tmax = 10000.0;
+
+    traceRayEXT(topLevelAS, rayFlags, 0xff, 0, 0, 0, origin.xyz, tmin, direction.xyz, tmax, 0);
+
+	vec4 originalPixel = imageLoad(image, ivec2(gl_LaunchIDEXT.xy));
+	vec3 blendedColors = mix(originalPixel.rgb, prd.hitValue.rgb, prd.hitValue.a);
+	float newAlpha = clamp((originalPixel.a + prd.hitValue.a), 0, 1);
+	vec4 newPixel = vec4(blendedColors, newAlpha);
+
+	imageStore(image, ivec2(gl_LaunchIDEXT.xy), newPixel);
+}

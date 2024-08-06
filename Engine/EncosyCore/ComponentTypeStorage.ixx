@@ -9,6 +9,7 @@ import <typeindex>;
 import <typeinfo>;
 import <span>;
 
+
 export class IComponentStorage
 {
 	friend class ComponentManager;
@@ -151,6 +152,11 @@ protected:
 	}
 
 	void SetComponentData(const size_t index, const ComponentType& component)
+	{
+		Storage[index] = std::move(component);
+	}
+
+	void SetComponentData(const size_t index, const ComponentType&& component)
 	{
 		Storage[index] = std::move(component);
 	}

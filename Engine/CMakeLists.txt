@@ -114,6 +114,8 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/WindowManager.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/MatrixCalculations.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/SetupCoreECS.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Core/Profiler.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ProfilerInterface.ixx"
 	
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/TransformComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystem.ixx"
@@ -134,13 +136,17 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SharedBetweenManagers.ixx"
 
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderThread.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCoreResources.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RaytracingResources.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderPipelineManager.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanTypes.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanInitializers.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanErrorLogger.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanUtilities.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanDescriptors.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanRaytracing.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanImgui.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/PipelineBuilder.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/AllocationHandler.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/MeshLoader.ixx"
@@ -148,8 +154,7 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ShaderLoader.ixx"
 	
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/MaterialComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/UnlitRenderSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/LitRenderSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/RaytracedRenderSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraComponent.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystemData.ixx"
@@ -161,10 +166,10 @@ list(APPEND EncosyEngine_MODULES_SRC
 # Used shaders, Engine
 list(APPEND EncosyEngine_SHADERS_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Gradient.comp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Lit.vert"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Lit.frag"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Unlit.vert"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Unlit.frag"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/RayGeneration.rgen"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/ClosestHit.rchit"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Miss.rmiss"
+	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/RaytraceShadow.rmiss"
 )
 
 # Used sources, Engine Testing

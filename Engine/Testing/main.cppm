@@ -34,8 +34,6 @@ import <span>;
 import <typeindex>;
 import <typeinfo>;
 
-
-
 void Tests()
 {
 	auto EngineCore = EncosyEngine::GetEncosyCore();
@@ -45,44 +43,6 @@ void Tests()
 	auto WorldEntityManager = PrimaryWorld->GetWorldEntityManager();
 	auto WorldSystemManager = PrimaryWorld->GetWorldSystemManager();
 
-}
-
-void TestThreadedTaskRunner()
-{
-	ThreadedTaskRunner ThreadingTest;
-
-	std::default_random_engine generator;
-	std::uniform_int_distribution<int> distributionInt(0, 2);
-	std::uniform_real_distribution<float> distributionFloat(.0f, .9f);
-	std::uniform_real_distribution<double> distributionDouble(.0, .9);
-
-	//Add Random Tasks
-	int threads = ThreadingTest.GetThreadCount() / 2;
-	std::vector<double> results;
-	for (size_t i = 0; i < threads; i++)
-	{
-		results.push_back(0);
-	}
-
-	for (size_t i = 0; i < threads; ++i)
-	{
-		int inx = distributionInt(generator);
-		float iny = distributionFloat(generator);
-		double inz = distributionDouble(generator);
-
-		ThreadingTest.AddWorkTask([=](int x, float y, double z, double* result) ->void {
-			double sleepDur = z + y + x;
-			for (size_t ix = 0; ix < 10000; ++ix)
-			{
-				sleepDur += sleepDur / 10000;
-			}
-			fmt::println("Result: {}; {}; {} = {}", x, y, z, sleepDur);
-			*result = sleepDur;
-
-			}, inx, iny, inz, &results[i]);
-	}
-
-	ThreadingTest.RunAllTasks();
 }
 
 void InitializeTestEntities()
@@ -102,6 +62,12 @@ void InitializeTestEntities()
 
 
 	auto error = MainTextureLoader->GetEngineTextureID(EngineTextures::ErrorCheckerBoard);
+	auto whiteID = MainTextureLoader->GetEngineTextureID(EngineTextures::White);
+	auto blackID = MainTextureLoader->GetEngineTextureID(EngineTextures::Black);
+	auto greyID = MainTextureLoader->GetEngineTextureID(EngineTextures::Grey);
+	auto normalID = MainTextureLoader->GetEngineTextureID(EngineTextures::NeutralNormal);
+	PBRTextureSet textureSet = PBRTextureSet(error, whiteID, greyID, blackID, normalID, greyID);
+	auto textureSetID = EngineRenderCore->RegisterTextureSetForRaytracingUsage(textureSet);
 
 
 	TransformComponent tc = {
@@ -109,21 +75,17 @@ void InitializeTestEntities()
 	.Scale = glm::vec3(10,1,10),
 	.Orientation = glm::quat(glm::vec3(glm::radians(0.0f),0,0)),
 	};
-	MaterialComponentUnlit mc = {
-		.Diffuse = error,
-		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Quad),
-		.TextureRepeat = 2.0f
-	};
+
+	MaterialComponentRaytracing mc = {};
+	mc.TextureSet = textureSetID;
+	mc.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere);
+	mc.TextureRepeat = 1.0f;
+	mc.Color = glm::vec3(1, 1, 1);
 
 	ModelMatrixComponent model = {};
 
 	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 
-	mc = {
-		.Diffuse = error,
-		.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere),
-		.TextureRepeat = 1.0f
-	};
 	tc = {
 	.Position = glm::vec3(-2,1,-2),
 	.Scale = glm::vec3(.5,1,.5),
@@ -173,8 +135,6 @@ int main()
     
 	EncosyEngine::InitializeEngine();
 
-	//TestThreadedTaskRunner();
-	//Tests();
 	InitializeTestEntities();
 
 	EncosyEngine::StartEngineLoop();

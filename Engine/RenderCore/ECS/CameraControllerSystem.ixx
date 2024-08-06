@@ -68,53 +68,79 @@ protected:
 		float rotateX = 0;
 		float rotateY = 0;
 
+		float rotateSpeed = 60.0f;
+
+
 		if (inputData.MouseRightDown)
 		{
 			controllerData.MainWindow->SetRelativeMouseMode(true);
 
-			float rotateSpeed = 60.0f;
-			float maxAngleChange = 5.0f;
-
 			float totalX = (float)inputData.MouseRelativeMotion.x * rotateSpeed * deltaTime;
 			float totalY = (float)inputData.MouseRelativeMotion.y * rotateSpeed * deltaTime;
-			if (totalX > maxAngleChange) { totalX = maxAngleChange; }
-			if (totalX < -maxAngleChange) { totalX = -maxAngleChange; }
-			if (totalY > maxAngleChange) { totalY = maxAngleChange; }
-			if (totalY < -maxAngleChange) { totalY = -maxAngleChange; }
 
+			controllerData.DesiredYaw += totalX;
+			controllerData.DesiredPitch -= totalY;
 
-			controllerData.Yaw += totalX;
-			controllerData.Pitch -= totalY;
-
-			if (controllerData.Pitch > 89.0f)
-				controllerData.Pitch = 89.0f;
-			if (controllerData.Pitch < -89.0f)
-				controllerData.Pitch = -89.0f;
-
-			//rotateX = (float)inputData.MouseRelativeMotion.x * 50.0f * deltaTime;
-			//rotateY = (float)inputData.MouseRelativeMotion.y * 50.0f * deltaTime;
+			if (controllerData.DesiredPitch > 89.0f)
+				controllerData.DesiredPitch = 89.0f;
+			if (controllerData.DesiredPitch < -89.0f)
+				controllerData.DesiredPitch = -89.0f;
 		}
 		else
 		{
 			controllerData.MainWindow->SetRelativeMouseMode(false);
 		}
 
-
-		//auto orientation = transformComponent.Orientation;
-		//orientation = MatrixCalculations::RotateByLocalAxisY(orientation, glm::radians(rotateX));
-		//orientation = MatrixCalculations::RotateByLocalAxisX(orientation, glm::radians(-rotateY));
-		//transformComponent.Orientation = orientation;
-
 		glm::vec3 WorldUp = glm::vec3(0, 1, 0);
-		//glm::vec3 front = orientation * glm::vec3(0, 0, 1);
 		glm::vec3 front;
 
-		float Yaw = controllerData.Yaw;
-		float Pitch = controllerData.Pitch;
+		glm::vec2 dir = 
+			glm::vec2(controllerData.DesiredYaw, controllerData.DesiredPitch) - 
+			glm::vec2(controllerData.CurrentYaw, controllerData.CurrentPitch);
+		float len = glm::length(dir);
+
+		float yawAdd = 0.0f;
+		float pitchAdd = 0.0f;
+		float clamp = 0.01f;
+		float smoothing = 0.2f;
+
+		if (len != 0)
+		{
+			glm::vec2 normalized = glm::normalize(dir);
+			yawAdd = normalized.x * len * (1 - smoothing);
+			pitchAdd = normalized.y * len * (1 - smoothing);
+			if (std::abs(yawAdd) > std::abs(dir.x))
+			{
+				yawAdd = dir.x;
+			}
+			if (std::abs(pitchAdd) > std::abs(dir.y))
+			{
+				pitchAdd = dir.y;
+			}
+		}
+		
+		if (std::abs(controllerData.DesiredYaw - controllerData.CurrentYaw) <= clamp)
+		{
+			controllerData.CurrentYaw = controllerData.DesiredYaw;
+		}
+		else
+		{
+			controllerData.CurrentYaw += yawAdd;
+		}
+		if (std::abs(controllerData.DesiredPitch - controllerData.CurrentPitch) <= clamp)
+		{
+			controllerData.CurrentPitch = controllerData.DesiredPitch;
+		}
+		else
+		{
+			controllerData.CurrentPitch += pitchAdd;
+		}
+
+		float Yaw = controllerData.CurrentYaw;
+		float Pitch = controllerData.CurrentPitch;
 		front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
 		front.y = sin(glm::radians(Pitch));
 		front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
-
 
 
 		cameraComponent.Front = glm::normalize(front);

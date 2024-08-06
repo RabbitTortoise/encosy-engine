@@ -12,6 +12,7 @@ import EncosyCore.Entity;
 import EncosyCore.EntityManager;
 import EncosyCore.ComponentManager;
 import EncosyCore.ThreadedTaskRunner;
+import EncosyEngine.ProfilerInterface;
 
 import <map>;
 import <set>;
@@ -308,22 +309,34 @@ protected:
 	{
 		for (const auto& systemId : systemRunBatch)
 		{
-			Systems[systemId]->SystemPreUpdate(deltaTime);
+			if(Systems[systemId]->GetEnabled())
+			{
+				Systems[systemId]->SystemPreUpdate(deltaTime);
+			}
 		}
 		ThreadRunner.RunAllTasks();
 		for (const auto& systemId : systemRunBatch)
 		{
-			Systems[systemId]->SystemUpdate();
+			if (Systems[systemId]->GetEnabled())
+			{
+				Systems[systemId]->SystemUpdate();
+			}
 		}
 		ThreadRunner.RunAllTasks();
 		for (const auto& systemId : systemRunBatch)
 		{
-			Systems[systemId]->SystemPerEntityUpdate();
+			if (Systems[systemId]->GetEnabled())
+			{
+				Systems[systemId]->SystemPerEntityUpdate();
+			}
 		}
 		ThreadPerEntityRunner.RunAllTasks();
 		for (const auto& systemId : systemRunBatch)
 		{
-			Systems[systemId]->SystemPostUpdate();
+			if (Systems[systemId]->GetEnabled())
+			{
+				Systems[systemId]->SystemPostUpdate();
+			}
 		}
 		ThreadRunner.RunAllTasks();
 	}

@@ -6,6 +6,7 @@ import EncosyCore.Entity;
 
 export struct SphereColliderComponent
 {
-	float Radius;
+	float Radius = 1;
+	bool Unmovable = false;
 };
 

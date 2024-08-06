@@ -43,17 +43,25 @@ public:
 	{
 		PrimaryWorldSystemManager->ManagerUpdate();
 	}
+
 	void PrimaryWorldPhysicsUpdate(const double deltaTime)
 	{
 		PrimaryWorldSystemManager->UpdatePhysicsSystems(deltaTime);
 	}
+
 	void PrimaryWorldSystemUpdate(const double deltaTime)
 	{
 		PrimaryWorldSystemManager->UpdateSystems(deltaTime);
 	}
+
 	void PrimaryWorldRenderUpdate(const double deltaTime)
 	{
 		PrimaryWorldSystemManager->UpdateRenderSystems(deltaTime);
+	}
+
+	void PrimaryWorldCleanup()
+	{
+		PrimaryWorldSystemManager->DestroySystems();
 	}
 
 	EncosyWorld* GetPrimaryWorld() { return PrimaryWorld.get(); }

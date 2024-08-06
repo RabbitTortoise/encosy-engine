@@ -8,12 +8,13 @@ import EncosyGame.RotationTest;
 import EncosyGame.StaticTest;
 import EncosyGame.CollisionDemo;
 import EncosyGame.DynamicDemo;
+import EncosyGame.RaytracingTest;
+import EncosyGame.AsteroidField;
 import EncosyEngine.Interface;
 
+enum class Scene { RotationTest = 0, StaticTest, CollisionDemo, DynamicDemo, Raytracing, AsteroidField};
 
-enum class Scene { RotationTest = 0, StaticTest, CollisionDemo, DynamicDemo};
-
-Scene ChosenScene = Scene::DynamicDemo;
+Scene ChosenScene = Scene::AsteroidField;
 bool Fullscreen = false;
 
 export
@@ -29,20 +30,19 @@ int main()
 		EncosyEngine::InitializeEngine("EncosyEngine", false, 1920, 1080);
 	}
 
-
 	if(ChosenScene == Scene::RotationTest)
 	{
-		int testDimensionsX = 25;
-		int testDimensionsY = 25;
-		int testDimensionsZ = 25;
+		int testDimensionsX = 10;
+		int testDimensionsY = 10;
+		int testDimensionsZ = 10;
 
 		InitRotationTest(testDimensionsX, testDimensionsY, testDimensionsZ);
 	}
 	if (ChosenScene == Scene::StaticTest)
 	{
-		int testDimensionsX = 25;
-		int testDimensionsY = 25;
-		int testDimensionsZ = 25;
+		int testDimensionsX = 30;
+		int testDimensionsY = 30;
+		int testDimensionsZ = 30;
 
 		InitStaticTest(testDimensionsX, testDimensionsY, testDimensionsZ);
 	}
@@ -58,7 +58,21 @@ int main()
 		glm::vec3 playnRegionMax = { 100, 70, -50 };
 		InitDynamicDemo(playRegionMin, playnRegionMax);
 	}
-	
+
+	if (ChosenScene == Scene::Raytracing)
+	{
+		int testDimensionsX = 20;
+		int testDimensionsY = 20;
+		int testDimensionsZ = 20;
+
+		InitRaytracingTest(testDimensionsX, testDimensionsY, testDimensionsZ);
+	}
+	if (ChosenScene == Scene::AsteroidField)
+	{
+		unsigned int asteroidCount = 250000;
+		InitAsteroidField(asteroidCount);
+	}
+
 	EncosyEngine::StartEngineLoop();
 	fmt::println("Stopping EncosyGame process");
 	return 0;

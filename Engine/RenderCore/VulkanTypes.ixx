@@ -10,6 +10,14 @@ export module RenderCore.VulkanTypes;
 
 import <vector>;
 
+
+export typedef size_t MeshID;
+export typedef size_t TextureID;
+export typedef size_t TextureSetID;
+export typedef size_t ShaderID;
+export typedef size_t RenderPipelineID;
+
+
 export
 struct AllocatedImage {
 	VkImage image;
@@ -39,12 +47,10 @@ struct Vertex {
 	float padding;
 };
 
-// Holds the loaded mesh vertex and index data
+// Holds all the position data for a vertex. Used when creating raytracing meshes.
 export
-struct Mesh
-{
-	std::vector<Vertex> vertices;
-	std::vector<uint32_t> indices;
+struct VertexPos {
+	glm::vec3 position;
 };
 
 // Holds the handles to allocated buffer
@@ -61,10 +67,37 @@ struct GPUMeshBuffers {
 
 	AllocatedBuffer indexBuffer;
 	AllocatedBuffer vertexBuffer;
+	VkDeviceAddress indexBufferAddress;
 	VkDeviceAddress vertexBufferAddress;
 };
 
-// Holds the resources needed for a mesh
+export
+struct GPURaytracingMeshBuffer{
+	AllocatedBuffer indexBuffer;
+	AllocatedBuffer vertexBuffer;
+	VkDeviceAddress indexBufferAddress;
+	VkDeviceAddress vertexBufferAddress;
+	VkAccelerationStructureGeometryKHR accelerationStructureGeometry;
+	VkAccelerationStructureBuildRangeInfoKHR accelerationStructureBuildRangeInfo;
+};
+
+// Holds the loaded mesh vertex and index data
+export
+struct Mesh
+{
+	std::vector<Vertex> vertices;
+	std::vector<uint32_t> indices;
+};
+
+export struct MeshAllocatedData
+{
+	Mesh* MeshInfo;
+	GPUMeshBuffers* BufferInfo;
+	GPURaytracingMeshBuffer* RaytracingBufferInfo;
+};
+
+
+// Holds the resources needed for model matrices
 export
 struct GPUModelMatrixBuffer {
 
@@ -79,10 +112,26 @@ struct VertexBufferPushConstants
 };
 
 export
-struct InstancedPushConstants
+struct RaytracingPushConstants
 {
 	VkDeviceAddress vertexBufferAddress;
-	VkDeviceAddress modelMatrixBufferAddress;
+	VkDeviceAddress indexBufferAddress;
+	glm::vec4  clearColor;
+};
+
+export
+struct RaytracingCameraProperties
+{
+	glm::mat4 viewInverse;
+	glm::mat4 projInverse;
+	glm::vec4 cameraPosition;
+};
+
+export
+struct RaytracingMaterialProperties
+{
+	VkDeviceAddress vertexBufferAddress;
+	VkDeviceAddress indexBufferAddress;
 };
 
 export
@@ -118,9 +167,46 @@ struct TextureOptions
 	float textureRepeat;
 };
 
+export
+struct PaletteInfo
+{
+	float h = 0;
+	std::vector<glm::vec<3, float>> colors;
+	std::vector<glm::vec<2, float>> sl;
+	bool enabled;
+};
 
+export
+struct PaletteOptions
+{
+	float h = 0;
+	int paletteSize = 0;
+	float enabled = 1;
+	float padding2 = 0;
+};
 
-export typedef size_t MeshID;
-export typedef size_t TextureID;
-export typedef size_t ShaderID;
-export typedef size_t RenderPipelineID;
+export
+struct RaytracingInstanceData
+{
+	uint32_t modelIndex = 0;
+	uint32_t textureSet = 0;
+	uint32_t padding1 = 0;
+	uint32_t padding2 = 0;
+	glm::vec3 color = glm::vec3(1);
+	float textureRepeat = 0;
+};
+
+export
+class PBRTextureSet
+{
+public:
+	PBRTextureSet(TextureID albedo, TextureID ambientOcclusion, TextureID depth, TextureID metallic, TextureID normal, TextureID roughness) :
+		Albedo(albedo), AmbientOcclusion(ambientOcclusion), Depth(depth), Metallic(metallic), Normal(normal), Roughness(roughness) {}
+
+	TextureID Albedo = 0;
+	TextureID AmbientOcclusion = 0;
+	TextureID Depth = 0;
+	TextureID Metallic = 0;
+	TextureID Normal = 0;
+	TextureID Roughness = 0;
+};
