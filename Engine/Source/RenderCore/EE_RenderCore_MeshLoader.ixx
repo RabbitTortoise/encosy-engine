@@ -25,7 +25,6 @@ export enum class EngineMesh { Error = 0, Cube, Quad, Sphere, Torus };
 
 export class MeshLoader
 {
-	friend class RenderCore;
 
 public:
 

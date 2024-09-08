@@ -19,13 +19,11 @@ import <iostream>;
 
 export class EE_ModelMatrixBuilderSystem : public SystemThreaded
 {
-	friend class SystemManager;
 
 public:
 	EE_ModelMatrixBuilderSystem() {}
 	~EE_ModelMatrixBuilderSystem() {}
 
-protected:
 	void Init() override
 	{
 		Type = SystemType::RenderSystem;

@@ -21,8 +21,6 @@ export enum class EngineTextures { ErrorCheckerBoard = 0, White, Black, Grey, Ne
 export class TextureLoader
 {
 
-	friend class RenderCore;
-
 public:
 
 	TextureLoader(AllocationHandler* allocationHandler) : vkAllocationHandler(allocationHandler) 

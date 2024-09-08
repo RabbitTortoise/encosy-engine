@@ -105,61 +105,87 @@ public:
 	virtual void SystemPerEntityUpdate() = 0;
 	virtual void SystemPostUpdate() = 0;
 
+	void InitSystemBase(SystemID id, ComponentManager* componentManager, EntityManager* entityManager, std::thread::id mainThreadID)
+	{
+		ID = id;
+		WorldComponentManager = componentManager;
+		WorldEntityManager = entityManager;
+		MainThreadID = mainThreadID;
+	}
+
 	std::unordered_set<std::type_index> GetWriteReadAccessedEntityComponents()
 	{
 		std::unordered_set<std::type_index> accessed;
-		accessed.insert(WriteReadSystemData.begin(), WriteReadSystemData.end());
-		accessed.insert(FetchedWriteReadComponentTypes.begin(), FetchedWriteReadComponentTypes.end());
-		accessed.insert(AlwaysFetchedWriteReadComponentTypes.begin(), AlwaysFetchedWriteReadComponentTypes.end());
+		accessed.insert(WriteReadSystemDataList.begin(), WriteReadSystemDataList.end());
+		accessed.insert(FetchedWriteReadComponentTypesList.begin(), FetchedWriteReadComponentTypesList.end());
+		accessed.insert(AlwaysFetchedWriteReadComponentTypesList.begin(), AlwaysFetchedWriteReadComponentTypesList.end());
 		return accessed;
 	}
 	std::unordered_set<std::type_index> GetAllAccessedEntityComponents()
 	{
 		std::unordered_set<std::type_index> accessed;
-		accessed.insert(ReadOnlySystemData.begin(), ReadOnlySystemData.end());
-		accessed.insert(WriteReadSystemData.begin(), WriteReadSystemData.end());
-		accessed.insert(FetchedReadOnlyComponentTypes.begin(), FetchedReadOnlyComponentTypes.end());
-		accessed.insert(FetchedWriteReadComponentTypes.begin(), FetchedWriteReadComponentTypes.end());
-		accessed.insert(AlwaysFetchedReadOnlyComponentTypes.begin(), AlwaysFetchedReadOnlyComponentTypes.end());
-		accessed.insert(AlwaysFetchedWriteReadComponentTypes.begin(), AlwaysFetchedWriteReadComponentTypes.end());
+		accessed.insert(ReadOnlySystemDataList.begin(), ReadOnlySystemDataList.end());
+		accessed.insert(WriteReadSystemDataList.begin(), WriteReadSystemDataList.end());
+		accessed.insert(FetchedReadOnlyComponentTypesList.begin(), FetchedReadOnlyComponentTypesList.end());
+		accessed.insert(FetchedWriteReadComponentTypesList.begin(), FetchedWriteReadComponentTypesList.end());
+		accessed.insert(AlwaysFetchedReadOnlyComponentTypesList.begin(), AlwaysFetchedReadOnlyComponentTypesList.end());
+		accessed.insert(AlwaysFetchedWriteReadComponentTypesList.begin(), AlwaysFetchedWriteReadComponentTypesList.end());
 		return accessed;
 	}
 
 	std::unordered_set<EntityType> GetReadOnlyAccessedEntityTypes()
 	{
 		std::unordered_set<EntityType> accessed;
-		accessed.insert(AccessedReadOnlyEntityTypes.begin(), AccessedReadOnlyEntityTypes.end());
+		accessed.insert(AccessedReadOnlyEntityTypesList.begin(), AccessedReadOnlyEntityTypesList.end());
 		return accessed;
 	}
 	std::unordered_set<EntityType> GetWriteReadAccessedEntityTypes()
 	{
 		std::unordered_set<EntityType> accessed;
-		accessed.insert(AccessedWriteReadEntityTypes.begin(), AccessedWriteReadEntityTypes.end());
-		accessed.insert(DestructiveEntityStorageAccess.begin(), DestructiveEntityStorageAccess.end());
+		accessed.insert(AccessedWriteReadEntityTypesList.begin(), AccessedWriteReadEntityTypesList.end());
+		accessed.insert(DestructiveEntityStorageAccessList.begin(), DestructiveEntityStorageAccessList.end());
 		return accessed;
 	}
 	std::unordered_set<EntityType> GetAllAccessedEntityTypes()
 	{
 		std::unordered_set<EntityType> accessed;
-		accessed.insert(AccessedReadOnlyEntityTypes.begin(), AccessedReadOnlyEntityTypes.end());
-		accessed.insert(AccessedWriteReadEntityTypes.begin(), AccessedWriteReadEntityTypes.end());
-		accessed.insert(DestructiveEntityStorageAccess.begin(), DestructiveEntityStorageAccess.end());
+		accessed.insert(AccessedReadOnlyEntityTypesList.begin(), AccessedReadOnlyEntityTypesList.end());
+		accessed.insert(AccessedWriteReadEntityTypesList.begin(), AccessedWriteReadEntityTypesList.end());
+		accessed.insert(DestructiveEntityStorageAccessList.begin(), DestructiveEntityStorageAccessList.end());
 		return accessed;
 	}
 
 	std::unordered_set<std::type_index> GetWriteReadAccessedComponentStorages()
 	{
 		std::unordered_set<std::type_index> accessed;
-		accessed.insert(AccessedReadOnlyComponentStorages.begin(), AccessedReadOnlyComponentStorages.end());
+		accessed.insert(AccessedReadOnlyComponentStoragesList.begin(), AccessedReadOnlyComponentStoragesList.end());
 		return accessed;
 	}
 
 	std::unordered_set<std::type_index> GetAllAccessedComponentStorages()
 	{
 		std::unordered_set<std::type_index> accessed;
-		accessed.insert(AccessedReadOnlyComponentStorages.begin(), AccessedReadOnlyComponentStorages.end());
-		accessed.insert(AccessedWriteReadComponentStorages.begin(), AccessedWriteReadComponentStorages.end());
+		accessed.insert(AccessedReadOnlyComponentStoragesList.begin(), AccessedReadOnlyComponentStoragesList.end());
+		accessed.insert(AccessedWriteReadComponentStoragesList.begin(), AccessedWriteReadComponentStoragesList.end());
 		return accessed;
+	}
+
+	void UpdateMatchingEntityTypes()
+	{
+		MatchingEntityTypes.clear();
+		WorldEntityManager->GetEntityTypesWithComponentConditions(MatchingEntityTypes, FetchedReadOnlyComponentTypesList, FetchedWriteReadComponentTypesList, RequiredComponentTypesList, ForbiddenComponentTypesList);
+	}
+
+	void FetchRequiredSpans()
+	{
+		AccessedReadOnlyEntityTypesList.clear();
+		AccessedWriteReadEntityTypesList.clear();
+		AccessedReadOnlyComponentStoragesList.clear();
+		AccessedWriteReadComponentStoragesList.clear();
+		for (auto& fetcher : FetchFunctions)
+		{
+			std::invoke(fetcher);
+		}
 	}
 
 protected:
@@ -168,44 +194,26 @@ protected:
 	void AddForbiddenComponentQuery()
 	{
 		auto& id = typeid(ComponentType);
-		ForbiddenComponentTypes.insert(id);
+		ForbiddenComponentTypesList.insert(id);
 	}
 
 	template <typename ComponentType>
 	void AddRequiredComponentQuery()
 	{
 		auto& id = typeid(ComponentType);
-		RequiredComponentTypes.insert(id);
+		RequiredComponentTypesList.insert(id);
 	}
 
 	void EnableDestructiveAccessToEntityStorage(const EntityType entityType)
 	{
-		DestructiveEntityStorageAccess.insert(entityType);
-	}
-
-	void UpdateMatchingEntityTypes()
-	{
-		MatchingEntityTypes.clear();
-		WorldEntityManager->GetEntityTypesWithComponentConditions(MatchingEntityTypes, FetchedReadOnlyComponentTypes, FetchedWriteReadComponentTypes, RequiredComponentTypes, ForbiddenComponentTypes);
-	}
-
-	void FetchRequiredSpans()
-	{
-		AccessedReadOnlyEntityTypes.clear();
-		AccessedWriteReadEntityTypes.clear();
-		AccessedReadOnlyComponentStorages.clear();
-		AccessedWriteReadComponentStorages.clear();
-		for (auto& fetcher : FetchFunctions)
-		{
-			std::invoke(fetcher);
-		}
+		DestructiveEntityStorageAccessList.insert(entityType);
 	}
 
 	template <typename ComponentType>
 	void AddWriteReadComponentFetcher(std::vector<std::span<ComponentType>>* storage)
 	{
 		auto& id = typeid(ComponentType);
-		FetchedWriteReadComponentTypes.insert(id);
+		FetchedWriteReadComponentTypesList.insert(id);
 
 		const std::function<void()> fetcher = std::bind_front(&SystemBase::WriteReadComponentDataFetcher<ComponentType>, this, storage);
 		FetchFunctions.push_back(fetcher);
@@ -215,7 +223,7 @@ protected:
 	void AddReadOnlyComponentFetcher(std::vector<std::span<ComponentType const>>* storage)
 	{
 		auto& id = typeid(ComponentType);
-		FetchedReadOnlyComponentTypes.insert(id);
+		FetchedReadOnlyComponentTypesList.insert(id);
 
 		const std::function<void()> fetcher = std::bind_front(&SystemBase::ReadOnlyComponentDataFetcher<ComponentType>, this, storage);
 		FetchFunctions.push_back(fetcher);
@@ -227,7 +235,7 @@ protected:
 		auto& id = typeid(ComponentType);
 		const EntitySpanFetchInfo FetchedEntityInfo = WorldEntityManager->GetEntityFetchInfo(typeID);
 		SystemEntityFetchInfo info = { .fetchInfo = FetchedEntityInfo , .componentType = id };
-		AlwaysFetchedWriteReadComponentTypes.insert(id);
+		AlwaysFetchedWriteReadComponentTypesList.insert(id);
 
 		const std::function<void()> fetcher = std::bind_front(&SystemBase::WriteReadEntitiesFetcher<ComponentType>, this, typeID, storage);
 		FetchFunctions.push_back(fetcher);
@@ -239,7 +247,7 @@ protected:
 		auto& id = typeid(ComponentType);
 		const EntitySpanFetchInfo fetchedEntityInfo = WorldEntityManager->GetEntityFetchInfo(typeID);
 		SystemEntityFetchInfo info = { .fetchInfo = fetchedEntityInfo , .componentType = id };
-		AlwaysFetchedReadOnlyComponentTypes.insert(id);
+		AlwaysFetchedReadOnlyComponentTypesList.insert(id);
 
 		const std::function<void()> fetcher = std::bind_front(&SystemBase::ReadOnlyEntitiesFetcher<ComponentType>, this, typeID, storage);
 		FetchFunctions.push_back(fetcher);
@@ -249,7 +257,7 @@ protected:
 	void AddReadOnlySystemDataFetcher(std::span<ComponentType const>* span)
 	{
 		auto& id = typeid(ComponentType);
-		ReadOnlySystemData.insert(id);
+		ReadOnlySystemDataList.insert(id);
 
 		const std::function<void()> fetcher = std::bind_front(&SystemBase::ReadOnlySystemDataFetcher<ComponentType>, this, span);
 		FetchFunctions.push_back(fetcher);
@@ -259,7 +267,7 @@ protected:
 	void AddWriteReadSystemDataFetcher(std::span<ComponentType>* span)
 	{
 		auto& id = typeid(ComponentType);
-		WriteReadSystemData.insert(id);
+		WriteReadSystemDataList.insert(id);
 
 		const std::function<void()> fetcher = std::bind_front(&SystemBase::WriteReadSystemDataFetcher<ComponentType>, this, span);
 		FetchFunctions.push_back(fetcher);
@@ -269,7 +277,7 @@ protected:
 	void AddReadOnlyAlwaysFetchComponents(std::vector < std::span<ComponentType const>>* storage)
 	{
 		auto& id = typeid(ComponentType);
-		ReadOnlyComponentStorages.insert(id);
+		ReadOnlyComponentStoragesList.insert(id);
 		const std::function<void()> fetcher = std::bind_front(&SystemBase::ReadOnlyComponentsFetcher<ComponentType>, this, storage);
 		FetchFunctions.push_back(fetcher);
 	}
@@ -288,7 +296,7 @@ private:
 		std::vector<std::span<ComponentType>> newStorage;
 		for (auto entityType : MatchingEntityTypes)
 		{
-			this->AccessedWriteReadEntityTypes.emplace_back(entityType);
+			this->AccessedWriteReadEntityTypesList.emplace_back(entityType);
 			std::span<ComponentType> span = WorldEntityManager->GetEntityWriteReadComponentSpan<ComponentType>(entityType);
 			newStorage.push_back(span);
 		}
@@ -305,7 +313,7 @@ private:
 		std::vector<std::span<ComponentType const>> newStorage;
 		for (auto entityType : MatchingEntityTypes)
 		{
-			this->AccessedReadOnlyEntityTypes.emplace_back(entityType);
+			this->AccessedReadOnlyEntityTypesList.emplace_back(entityType);
 			std::span<ComponentType const> span = WorldEntityManager->GetEntityReadOnlyComponentSpan<ComponentType>(entityType);
 			newStorage.push_back(span);
 		}
@@ -319,7 +327,7 @@ private:
 	template <typename ComponentType>
 	void WriteReadEntitiesFetcher(EntityType typeID, std::span<ComponentType>* span)
 	{
-		this->AccessedWriteReadEntityTypes.emplace_back(typeID);
+		this->AccessedWriteReadEntityTypesList.emplace_back(typeID);
 		std::span<ComponentType> fetchedSpan = WorldEntityManager->GetEntityReadOnlyComponentSpan<ComponentType>(typeID);
 		*span = fetchedSpan;
 	}
@@ -327,7 +335,7 @@ private:
 	template <typename ComponentType>
 	void ReadOnlyEntitiesFetcher(EntityType typeID, std::span<ComponentType const>* span)
 	{
-		this->AccessedReadOnlyEntityTypes.emplace_back(typeID);
+		this->AccessedReadOnlyEntityTypesList.emplace_back(typeID);
 		std::span<ComponentType const> fetchedSpan = WorldEntityManager->GetEntityReadOnlyComponentSpan<ComponentType>(typeID);
 		*span = fetchedSpan;
 	}
@@ -349,7 +357,7 @@ private:
 	void ReadOnlyComponentsFetcher(std::vector<std::span<ComponentType const>>* spans)
 	{
 		auto& id = typeid(ComponentType);
-		this->AccessedReadOnlyComponentStorages.emplace_back(id);
+		this->AccessedReadOnlyComponentStoragesList.emplace_back(id);
 		*spans = WorldComponentManager->GetReadOnlyComponentSpans<ComponentType>();
 	}
 
@@ -362,13 +370,32 @@ public:
 	bool GetInitialized() const { return bInitialized; }
 	bool GetEnabled() const { return bEnabled; }
 	bool GetRunAlone() const { return RunAlone; }
-	std::string GetRunBeforeSpecificSystem() { return RunBeforeSpecificSystem; }
-	std::string GetRunWithSpecificSystem() { return RunWithSpecificSystem; }
-	std::string GetRunAfterSpecificSystem() { return RunAfterSpecificSystem; }
+	std::string GetRunBeforeSpecificSystem() const { return RunBeforeSpecificSystem; }
+	std::string GetRunWithSpecificSystem() const { return RunWithSpecificSystem; }
+	std::string GetRunAfterSpecificSystem() const { return RunAfterSpecificSystem; }
+
+	std::unordered_set<std::type_index> GetAlwaysFetchedReadOnlyComponentTypesList() const { return AlwaysFetchedReadOnlyComponentTypesList; }
+	std::unordered_set<std::type_index> GetAlwaysFetchedWriteReadComponentTypesList() const { return AlwaysFetchedWriteReadComponentTypesList; }
+	std::unordered_set<std::type_index> GetReadOnlySystemDataList() const { return ReadOnlySystemDataList; }
+	std::unordered_set<std::type_index> GetWriteReadSystemDataList() const { return WriteReadSystemDataList; }
+	std::unordered_set<std::type_index> GetReadOnlyComponentStoragesList() const { return ReadOnlyComponentStoragesList; }
+	std::unordered_set<std::type_index> GetWriteReadComponentStoragesList() const { return WriteReadComponentStoragesList; }
+	std::unordered_set<std::type_index> GetFetchedReadOnlyComponentTypesList() const { return FetchedReadOnlyComponentTypesList; }
+	std::unordered_set<std::type_index> GetFetchedWriteReadComponentTypesList() const { return FetchedWriteReadComponentTypesList; }
+	std::unordered_set<std::type_index> GetForbiddenComponentTypesList() const { return ForbiddenComponentTypesList; }
+	std::unordered_set<std::type_index> GetRequiredComponentTypesList() const { return RequiredComponentTypesList; }
+	std::unordered_set<EntityType> GetDestructiveEntityStorageAccessList() const { return DestructiveEntityStorageAccessList; }
+	std::vector<EntityType> GetAccessedReadOnlyEntityTypesList() const { return AccessedReadOnlyEntityTypesList; }
+	std::vector<EntityType> GetAccessedWriteReadEntityTypesList() const { return AccessedWriteReadEntityTypesList; }
+	std::vector<std::type_index> GetAccessedReadOnlyComponentStoragesList() const { return AccessedReadOnlyComponentStoragesList; }
+	std::vector<std::type_index> GetAccessedWriteReadComponentStoragesList() const { return AccessedWriteReadComponentStoragesList; }
+
+
 
 	void SetID(SystemID newId) { ID = newId; }
 	void SetInitialized(bool initialized) { bInitialized = initialized; }
 	void SetEnabled(bool enabled) { bEnabled = enabled; }
+
 
 protected:
 
@@ -389,33 +416,35 @@ protected:
 	std::thread::id MainThreadID;
 
 	// For accessing entities that are required to be fetched regardless of query rules
-	std::unordered_set<std::type_index> AlwaysFetchedReadOnlyComponentTypes;
-	std::unordered_set<std::type_index> AlwaysFetchedWriteReadComponentTypes;
+	std::unordered_set<std::type_index> AlwaysFetchedReadOnlyComponentTypesList;
+	std::unordered_set<std::type_index> AlwaysFetchedWriteReadComponentTypesList;
 
 	// For accessing system data storages.
-	std::unordered_set<std::type_index> ReadOnlySystemData;
-	std::unordered_set<std::type_index> WriteReadSystemData;
+	std::unordered_set<std::type_index> ReadOnlySystemDataList;
+	std::unordered_set<std::type_index> WriteReadSystemDataList;
 
 	// For accessing entire component storages
-	std::unordered_set<std::type_index> ReadOnlyComponentStorages;
-	std::unordered_set<std::type_index> WriteReadComponentStorages;
+	std::unordered_set<std::type_index> ReadOnlyComponentStoragesList;
+	std::unordered_set<std::type_index> WriteReadComponentStoragesList;
 
 	// For dynamic entity querying
-	std::unordered_set<std::type_index> FetchedReadOnlyComponentTypes;
-	std::unordered_set<std::type_index> FetchedWriteReadComponentTypes;
-	std::unordered_set<std::type_index> ForbiddenComponentTypes;
-	std::unordered_set<std::type_index> RequiredComponentTypes;
+	std::unordered_set<std::type_index> FetchedReadOnlyComponentTypesList;
+	std::unordered_set<std::type_index> FetchedWriteReadComponentTypesList;
+	std::unordered_set<std::type_index> ForbiddenComponentTypesList;
+	std::unordered_set<std::type_index> RequiredComponentTypesList;
 
 	// For managing rights to make destructive modifications directly to entity storages.
-	std::unordered_set<EntityType> DestructiveEntityStorageAccess;
+	std::unordered_set<EntityType> DestructiveEntityStorageAccessList;
 
+
+	// TODO Check if these can be unordered_set instead of vector
 	// Logs all entity types that are accessed with fetch-functions
-	std::vector<EntityType> AccessedReadOnlyEntityTypes;
-	std::vector<EntityType> AccessedWriteReadEntityTypes;
+	std::vector<EntityType> AccessedReadOnlyEntityTypesList;
+	std::vector<EntityType> AccessedWriteReadEntityTypesList;
 
 	// Logs all component storages that are accessed with fetch-functions
-	std::vector<std::type_index> AccessedReadOnlyComponentStorages;
-	std::vector<std::type_index> AccessedWriteReadComponentStorages;
+	std::vector<std::type_index> AccessedReadOnlyComponentStoragesList;
+	std::vector<std::type_index> AccessedWriteReadComponentStoragesList;
 
 
 

@@ -29,7 +29,6 @@ import <functional>;
 
 export class AllocationHandler
 {
-	friend class RenderCore;
 
 public:
 	AllocationHandler(RenderCoreResources* resources, RaytracingResources* rtResources)
@@ -543,6 +542,9 @@ public:
 			pData += HitRegion.stride;
 		}
 	}
+
+// Variables
+	VmaAllocator GetVmaAllocator() const { return vmaAllocator; };
 
 private:
 	RenderCoreResources* CoreResources;

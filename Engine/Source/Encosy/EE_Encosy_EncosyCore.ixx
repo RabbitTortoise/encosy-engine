@@ -17,7 +17,7 @@ import <vector>;
 
 export class EncosyCore
 {
-	friend class EngineCore;
+
 public:
 	EncosyCore() 
 	{ 
@@ -40,7 +40,7 @@ public:
 
 	void PrimaryWorldSystemManagerUpdate()
 	{
-		PrimaryWorldSystemManager->ManagerUpdate();
+		PrimaryWorldSystemManager->SystemManagerUpdate();
 	}
 
 	void PrimaryWorldPhysicsUpdate(const double deltaTime)

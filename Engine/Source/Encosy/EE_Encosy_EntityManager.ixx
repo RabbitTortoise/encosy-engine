@@ -77,7 +77,6 @@ export struct EntityOperationResult
 
 export class EntityManager
 {
-	friend class SystemManager;
 
 public:
 	EntityManager(SharedBetweenManagers* sharedBetweenManagers, ComponentManager* worldComponentManager)

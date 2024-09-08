@@ -71,6 +71,9 @@ public:
 	{
 	}
 
+	virtual void Init() = 0;
+	virtual void Destroy() = 0; 
+
 	void SystemThreadedInit(ThreadedTaskRunner* threadRunner, ThreadedPerEntityTaskRunner* threadPerEntityRunner, int threadCount)
 	{
 		ThreadRunner = threadRunner;
@@ -84,15 +87,12 @@ public:
 		ThreadCopyFunctions = std::vector(ThreadCount, std::vector<std::function<void()>>());
 	}
 
-
 protected:
 
-	//virtual void Init() {} //SystemBase
 	virtual void PreUpdate(int thread, const double deltaTime) = 0;
 	virtual void Update(int thread, const double deltaTime) = 0;
 	virtual void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) = 0;
 	virtual void PostUpdate(int thread, const double deltaTime) = 0;
-	//virtual void Destroy() = 0; //SystemBase
 
 	void SetThreadedRunOptions(SystemThreadedOptions options)
 	{
@@ -208,7 +208,7 @@ protected:
 			fmt::println("ERROR: Can't use CreateEntityWithData with current system options.");
 			return -1; 
 		}
-		if (!DestructiveEntityStorageAccess.contains(entityType))
+		if (!DestructiveEntityStorageAccessList.contains(entityType))
 		{
 			fmt::println("ERROR: CreateEntityWithDataThreaded(): System does not have destructive access to entity type {}", entityType);
 			return false;
@@ -225,7 +225,7 @@ protected:
 			return false;
 		}
 
-		if (!DestructiveEntityStorageAccess.contains(entityType))
+		if (!DestructiveEntityStorageAccessList.contains(entityType))
 		{
 			fmt::println("ERROR: DeleteEntityThreaded(): System does have destructive acccess to entity type {}", entity, entityType);
 			return false;
@@ -242,12 +242,12 @@ protected:
 			fmt::println("ERROR: Can't use DeleteEntity with current system options.");  
 			return false; 
 		}
-		if (!DestructiveEntityStorageAccess.contains(entityType))
+		if (!DestructiveEntityStorageAccessList.contains(entityType))
 		{
 			fmt::println("ERROR: ModifyEntityComponentsThreaded(): System doen not have access to modify entity type {}", entityType);
 			return false;
 		}
-		if (!DestructiveEntityStorageAccess.contains(newEntityType))
+		if (!DestructiveEntityStorageAccessList.contains(newEntityType))
 		{
 			fmt::println("ERROR: ModifyEntityComponentsThreaded(): System doen not have access to modify entity type {}", newEntityType);
 			return false;

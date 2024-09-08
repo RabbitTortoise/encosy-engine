@@ -4,7 +4,7 @@ module;
 #include <fmt/core.h>
 #include <fmt/os.h>
 
-export module EE.Profiler;
+export module EE_Profiler;
 
 import <chrono>;
 import <string>;

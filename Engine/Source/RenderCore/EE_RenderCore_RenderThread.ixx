@@ -54,8 +54,10 @@ private:
 export
 class RenderThread
 {
-	friend class RenderCore;
+public:
 
+	RenderThread() { RenderThreadData = nullptr; }
+	~RenderThread() { Cleanup(); }
 
 	struct ThreadData
 	{
@@ -71,11 +73,11 @@ class RenderThread
 		std::barrier<>* finishBarrier
 		)
 	{
-		Data = new ThreadData();
-		Data->StopToken = token;
-		Data->StartBarrier = startBarrier;
-		Data->FinishBarrier = finishBarrier;
-		Data->Thread = std::jthread(std::bind_front(&RenderThread::RunThread, this), Data);
+		RenderThreadData = new ThreadData();
+		RenderThreadData->StopToken = token;
+		RenderThreadData->StartBarrier = startBarrier;
+		RenderThreadData->FinishBarrier = finishBarrier;
+		RenderThreadData->Thread = std::jthread(std::bind_front(&RenderThread::RunThread, this), RenderThreadData);
 	}
 
 	template <typename Function, typename... Args>
@@ -99,8 +101,6 @@ class RenderThread
 		Queue_.Clear();
 	}
 
-private:
-
 	void RunThread(ThreadData* threadData)
 	{
 		while (!threadData->StopToken.stop_requested())
@@ -118,7 +118,26 @@ private:
 		}
 	}
 
+	void JoinThread()
+	{
+		if(RenderThreadData)
+		{
+			RenderThreadData->Thread.join();
+		}
+	}
+
+	void Cleanup()
+	{
+		if(RenderThreadData)
+		{
+			delete RenderThreadData;
+			RenderThreadData = nullptr;
+		}
+	}
+
+private:
+
 	ThreadSafeQueue<std::function<void()>> Queue_;
 	std::atomic<bool> bIsWorking = false;
-	ThreadData* Data;
+	ThreadData* RenderThreadData;
 };

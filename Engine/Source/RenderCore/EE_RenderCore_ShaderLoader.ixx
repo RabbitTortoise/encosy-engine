@@ -21,9 +21,6 @@ export enum class EngineRaytracingShaders { RayGen = 0, RayClosestHit = 1, RayMi
 
 export class ShaderLoader
 {
-	friend class RenderCore;
-	friend class RenderPipelineManager;
-
 public:
 
 	ShaderLoader(AllocationHandler* allocationHandler, RenderCoreResources* resources) : Resources(resources), vkAllocationHandler(allocationHandler)
@@ -112,9 +109,6 @@ public:
 		fmt::println("ERROR: Raytracing shader by given id was not found!");
 		return nullptr;
 	}
-
-
-protected:
 
 	void InitEngineShaders()
 	{

@@ -54,7 +54,6 @@ export enum class EngineRTStageIndices {RayGen = 0, Miss = 1, Shadow = 2, Closes
 
 export class RenderPipelineManager
 {
-	friend class RenderCore;
 
 public:
 
@@ -86,7 +85,6 @@ public:
 		return RaytracingPipelines[static_cast<int>(pipeline)];
 	}
 
-protected:
 
 	void InitEngineRenderPipelines()
 	{
@@ -107,7 +105,12 @@ protected:
 		InitRaytracingPipeline();
 	}
 
+	void CleanEngineRenderPipelines()
+	{
+		PipelinesDeletionQueue.flush();
+	}
 
+protected:
 	void InitGradientComputeDescriptors()
 	{
 		RenderPipeline& GradientComputePipeline = Pipelines[static_cast<int>(EngineRenderPipelines::GradientCompute)];
@@ -340,11 +343,6 @@ protected:
 				vkDestroyDescriptorSetLayout(CoreResources->vkDevice, ds, nullptr);
 			}
 		});
-	}
-
-	void CleanEngineRenderPipelines()
-	{
-		PipelinesDeletionQueue.flush();
 	}
 	
 

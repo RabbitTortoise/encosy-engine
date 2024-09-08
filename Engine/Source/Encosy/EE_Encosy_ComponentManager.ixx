@@ -22,8 +22,6 @@ export class ComponentManager
 {
 public:
 
-	friend class EntityManager;
-	friend class SystemManager;
 
 	ComponentManager(SharedBetweenManagers* sharedBetweenManagers) { WorldSharedBetweenManagers = sharedBetweenManagers; }
 	~ComponentManager() {}
@@ -351,21 +349,6 @@ public:
 		return originInterface->MoveComponentToOtherStorage(componentIndex, destinationInterface);
 	}
 
-	
-
-
-private:
-	SharedBetweenManagers* WorldSharedBetweenManagers;
-
-	std::map<std::type_index, std::vector<std::unique_ptr<IComponentStorage>>> ComponentStorages;
-	std::map<std::type_index, std::unique_ptr<IComponentStorage>> SystemDataStorages;
-
-
-	//Protection measurements against systems modifying same memory in multiple threads.
-	bool ThreadingProtectionCheckOngoing = false;
-	std::unordered_set<std::type_index> ThreadingProtectionReadOnlyComponentsAccessed;
-	std::unordered_set<std::type_index> ThreadingProtectionWriteReadComponentsAccessed;
-		
 	void InitThreadingProtectionCheck()
 	{
 		ThreadingProtectionCheckOngoing = true;
@@ -377,4 +360,16 @@ private:
 	{
 		ThreadingProtectionCheckOngoing = false;
 	};
+
+	//Protection measurements against systems modifying same memory in multiple threads.
+	std::unordered_set<std::type_index> ThreadingProtectionReadOnlyComponentsAccessed;
+	std::unordered_set<std::type_index> ThreadingProtectionWriteReadComponentsAccessed;
+
+private:
+	SharedBetweenManagers* WorldSharedBetweenManagers;
+
+	std::map<std::type_index, std::vector<std::unique_ptr<IComponentStorage>>> ComponentStorages;
+	std::map<std::type_index, std::unique_ptr<IComponentStorage>> SystemDataStorages;
+
+	bool ThreadingProtectionCheckOngoing = false;
 };

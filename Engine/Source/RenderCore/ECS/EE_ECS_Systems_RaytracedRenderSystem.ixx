@@ -30,7 +30,6 @@ import <vector>;
 
 export class EE_RaytracedRenderSystem : public SystemThreaded
 {
-	friend class SystemManager;
 
 	SystemThreadedOptions ThreadedRunOptions =
 	{
@@ -54,7 +53,6 @@ public:
 	}
 	~EE_RaytracedRenderSystem() {}
 
-protected:
 	void Init() override
 	{
 		Type = SystemType::RenderSystem;
@@ -85,10 +83,8 @@ protected:
 		ThreadVariablesVector = std::vector<ThreadVariables>(threadCount, ThreadVariables());
 	};
 
-	void ClearTemporaryInstanceData()
-	{
+protected:
 
-	}
 
 	// Thread data initialization
 	void PreUpdate(const int thread, const double deltaTime) override

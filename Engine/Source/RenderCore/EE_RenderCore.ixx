@@ -56,7 +56,6 @@ import <barrier>;
 
 export class RenderCore
 {
-	friend class EngineCore;
 
 public:
 
@@ -297,7 +296,7 @@ public:
 		rimg_allocinfo.requiredFlags = VkMemoryPropertyFlags(VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
 		// Allocate and create the image
-		vmaCreateImage(MainAllocationHandler->vmaAllocator, &rimg_info, &rimg_allocinfo, &Resources.vkDrawImage.image, &Resources.vkDrawImage.allocation, nullptr);
+		vmaCreateImage(MainAllocationHandler->GetVmaAllocator(), &rimg_info, &rimg_allocinfo, &Resources.vkDrawImage.image, &Resources.vkDrawImage.allocation, nullptr);
 
 		// Build a image-view for the draw image to use for rendering
 		VkImageViewCreateInfo rview_info = vkInit::Imageview_CreateInfo(Resources.vkDrawImage.imageFormat, Resources.vkDrawImage.image, VK_IMAGE_ASPECT_COLOR_BIT);
@@ -313,7 +312,7 @@ public:
 		VkImageCreateInfo dimg_info = vkInit::Image_CreateInfo(Resources.vkDepthImage.imageFormat, depthImageUsages, drawImageExtent);
 
 		// Allocate and create the image
-		vmaCreateImage(MainAllocationHandler->vmaAllocator, &dimg_info, &rimg_allocinfo, &Resources.vkDepthImage.image, &Resources.vkDepthImage.allocation, nullptr);
+		vmaCreateImage(MainAllocationHandler->GetVmaAllocator(), &dimg_info, &rimg_allocinfo, &Resources.vkDepthImage.image, &Resources.vkDepthImage.allocation, nullptr);
 
 		// Build a image-view for the depth image to use for rendering
 		VkImageViewCreateInfo dview_info = vkInit::Imageview_CreateInfo(Resources.vkDepthImage.imageFormat, Resources.vkDepthImage.image, VK_IMAGE_ASPECT_DEPTH_BIT);
@@ -323,10 +322,10 @@ public:
 		// Add to deletion queues
 		MainDeletionQueue.push_back([=]() {
 			vkDestroyImageView(Resources.vkDevice, Resources.vkDrawImage.imageView, nullptr);
-			vmaDestroyImage(MainAllocationHandler->vmaAllocator, Resources.vkDrawImage.image, Resources.vkDrawImage.allocation);
+			vmaDestroyImage(MainAllocationHandler->GetVmaAllocator(), Resources.vkDrawImage.image, Resources.vkDrawImage.allocation);
 
 			vkDestroyImageView(Resources.vkDevice, Resources.vkDepthImage.imageView, nullptr);
-			vmaDestroyImage(MainAllocationHandler->vmaAllocator, Resources.vkDepthImage.image, Resources.vkDepthImage.allocation);
+			vmaDestroyImage(MainAllocationHandler->GetVmaAllocator(), Resources.vkDepthImage.image, Resources.vkDepthImage.allocation);
 			});
 	}
 
@@ -703,7 +702,7 @@ public:
 		StopSource.request_stop();
 		auto copyToken = StartBarrier->arrive();
 		auto finishToken = FinishBarrier->arrive();
-		MainRenderThread.Data->Thread.join();
+		MainRenderThread.JoinThread();
 
 		// Make sure the gpu has stopped doing its things
 		vkDeviceWaitIdle(Resources.vkDevice);
@@ -738,7 +737,7 @@ public:
 		vkDestroyInstance(Resources.vkInstance, nullptr);
 
 
-		delete MainRenderThread.Data;
+		MainRenderThread.Cleanup();
 		delete StartBarrier;
 		delete FinishBarrier;
 	}

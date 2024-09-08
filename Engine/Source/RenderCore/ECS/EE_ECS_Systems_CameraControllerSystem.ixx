@@ -24,14 +24,12 @@ import <iostream>;
 export
 class EE_CameraControllerSystem : public System
 {
-	friend class SystemManager;
 
 public:
 	EE_CameraControllerSystem() {}
 	~EE_CameraControllerSystem() {}
 
-protected:
-	void Init() override 
+	void Init() override
 	{
 		Type = SystemType::System;
 		RunSyncPoint = SystemSyncPoint::WithEngineSystems;
@@ -43,6 +41,9 @@ protected:
 		AddComponentQueryForWriting(&CameraComponents);
 
 	}
+
+protected:
+	
 	void PreUpdate(const double deltaTime) override {}
 	void Update(const double deltaTime) override {}
 	void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) override

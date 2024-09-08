@@ -34,13 +34,14 @@ public:
 	System() {}
 	~System() override {}
 
+	virtual void Init() = 0;
+	virtual void Destroy() = 0;
+
 protected:
 
-	// virtual void Init() = 0; //SystemBase
 	virtual void PreUpdate(double deltaTime) = 0;
 	virtual void Update(double deltaTime) = 0;
 	virtual void PostUpdate(double deltaTime) = 0;
-	// virtual void Destroy() = 0; //SystemBase
 
 
 	virtual void UpdatePerEntity(double deltaTime, Entity entity, EntityType entityType) = 0;

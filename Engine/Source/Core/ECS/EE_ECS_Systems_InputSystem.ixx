@@ -18,7 +18,6 @@ import <queue>;
 export
 class EE_InputSystem : public System
 {
-	friend class SystemManager;
 
 public:
 	EE_InputSystem() {}
@@ -29,14 +28,16 @@ public:
 		EventsInQueue.push(e);
 	}
 
-protected:
-	void Init() override 
+	void Init() override
 	{
 		Type = SystemType::System;
 		RunSyncPoint = SystemSyncPoint::First;
 
 		AddSystemDataForWriting(&InputSystemDataComponent);
 	}
+
+protected:
+	
 	void PreUpdate(const double deltaTime) override {}
 	void Update(const double deltaTime) override
 	{

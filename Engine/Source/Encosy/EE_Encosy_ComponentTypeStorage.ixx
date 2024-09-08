@@ -12,8 +12,6 @@ import <span>;
 
 export class IComponentStorage
 {
-	friend class ComponentManager;
-
 public:
 	IComponentStorage() {}
 	virtual ~IComponentStorage() {}
@@ -31,10 +29,8 @@ public:
 
 export struct ComponentStorageLocator
 {
-public:
 	std::type_index ComponentType = typeid(ComponentStorageLocator);
 	size_t ComponentStorageIndex = -1;
-
 };
 
 
@@ -45,7 +41,6 @@ public:
 export template <typename ComponentType>
 class ComponentTypeStorage: public IComponentStorage
 {
-	friend class ComponentManager;
 
 public:
 	ComponentTypeStorage()
@@ -60,7 +55,6 @@ public:
 		return Storage.size();
 	}
 
-protected:
 	/// <summary>
 	/// Removes component from specific index
 	/// </summary>
@@ -180,8 +174,6 @@ private:
 export template <typename ComponentType>
 class SystemDataStorage : public IComponentStorage
 {
-	friend class ComponentManager;
-	friend class EntityTypeStorage;
 
 public:
 	SystemDataStorage()
@@ -203,8 +195,6 @@ public:
 		auto newStorage = std::make_unique<SystemDataStorage<ComponentType>>();
 		return std::move(newStorage);
 	}
-
-protected:
 
 	void SetComponentDataFromCopy(const ComponentType& component)
 	{

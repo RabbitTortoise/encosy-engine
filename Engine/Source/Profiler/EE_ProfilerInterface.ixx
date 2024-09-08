@@ -1,7 +1,7 @@
 module;
 export module EE_ProfilerInterface;
 
-import EE.Profiler;
+import EE_Profiler;
 import <string>;
 
 namespace

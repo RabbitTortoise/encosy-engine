@@ -34,8 +34,6 @@ export class SystemManager
 {
 public:
 
-	friend class EncosyCore;
-
 	SystemManager(SharedBetweenManagers* sharedBetweenManagers, ComponentManager* componentManager, EntityManager* entityManager)
 	{
 		WorldSharedBetweenManagers = sharedBetweenManagers;
@@ -58,10 +56,7 @@ public:
 		auto id = Systems.size();
 		auto system = std::make_unique<T>(std::move(T(args...)));
 
-		system->SetID(id);
-		system->WorldComponentManager = WorldComponentManager;
-		system->WorldEntityManager = WorldEntityManager;
-		system->MainThreadID = MainThreadID; 
+		system->InitSystemBase(id, WorldComponentManager, WorldEntityManager, MainThreadID);
 		InitSystem(system.get(), systemName);
 
 		ThreadingProtectionChecks(system.get(), systemName);
@@ -109,7 +104,7 @@ public:
 		if (system->GetAllowDestructiveEditsInThreads())
 		{
 			auto readOnlyEntities = system->GetReadOnlyAccessedEntityTypes();
-			auto nextDestructiveAccess = system->DestructiveEntityStorageAccess;
+			auto nextDestructiveAccess = system->GetDestructiveEntityStorageAccessList();
 
 			bool destructiveCollision = false;
 			for (const auto& access : nextDestructiveAccess)
@@ -172,13 +167,13 @@ public:
 	std::unordered_set<std::type_index> CompileWantedReadOnlyAccess(T* system)
 	{
 		std::unordered_set<std::type_index> wantedReadOnly;
-		auto readOnlySet = system->FetchedReadOnlyComponentTypes;
+		auto readOnlySet = system->GetFetchedReadOnlyComponentTypesList();
 		wantedReadOnly.insert(readOnlySet.begin(), readOnlySet.end());
-		readOnlySet = system->ReadOnlySystemData;
+		readOnlySet = system->GetReadOnlySystemDataList();
 		wantedReadOnly.insert(readOnlySet.begin(), readOnlySet.end());
-		readOnlySet = system->AlwaysFetchedReadOnlyComponentTypes;
+		readOnlySet = system->GetAlwaysFetchedReadOnlyComponentTypesList();
 		wantedReadOnly.insert(readOnlySet.begin(), readOnlySet.end());
-		readOnlySet = system->ReadOnlyComponentStorages;
+		readOnlySet = system->GetReadOnlyComponentStoragesList();
 		wantedReadOnly.insert(readOnlySet.begin(), readOnlySet.end());
 		return wantedReadOnly;
 	}
@@ -187,13 +182,13 @@ public:
 	std::unordered_set<std::type_index> CompileWantedWriteReadAccess(T* system)
 	{
 		std::unordered_set<std::type_index> wantedWriteRead;
-		auto writeReadSet = system->FetchedWriteReadComponentTypes;
+		auto writeReadSet = system->GetFetchedWriteReadComponentTypesList();
 		wantedWriteRead.insert(writeReadSet.begin(), writeReadSet.end());
-		writeReadSet = system->WriteReadSystemData;
+		writeReadSet = system->GetWriteReadSystemDataList();
 		wantedWriteRead.insert(writeReadSet.begin(), writeReadSet.end());
-		writeReadSet = system->AlwaysFetchedWriteReadComponentTypes;
+		writeReadSet = system->GetAlwaysFetchedWriteReadComponentTypesList();
 		wantedWriteRead.insert(writeReadSet.begin(), writeReadSet.end());
-		writeReadSet = system->WriteReadComponentStorages;
+		writeReadSet = system->GetWriteReadComponentStoragesList();
 		wantedWriteRead.insert(writeReadSet.begin(), writeReadSet.end());
 		return wantedWriteRead;
 	}
@@ -273,7 +268,34 @@ public:
 		ExecutionOrderRecalculationNeeded_ = true;
 	}
 
-protected:
+	void SystemManagerUpdate()
+	{
+		if (!WorldSharedBetweenManagers->IsCurrentComposition(CurrentWorldCompositionNumber_))
+		{
+			ExecutionOrderRecalculationNeeded_ = true;
+			CurrentWorldCompositionNumber_ = WorldSharedBetweenManagers->GetCurrentComposition();
+		}
+
+		if (ExecutionOrderRecalculationNeeded_)
+		{
+			fmt::println("Rebuilding system execute order batches:");
+			PhysicsSystemBatches = ReorderSystems(SystemType::PhysicsSystem);
+			RegularSystemBatches = ReorderSystems(SystemType::System);
+			RenderSystemBatches = ReorderSystems(SystemType::RenderSystem);
+
+			std::string names = CompilePhysicsBatchNames(PhysicsSystemBatches);
+			fmt::println("PhysicsSystemBatches:\n{}", names);
+
+			names = CompileSystemBatchNames(RegularSystemBatches);
+			fmt::println("RegularSystemBatches:\n{}", names);
+
+			names = CompileRenderBatchNames(RenderSystemBatches);
+			fmt::println("RenderSystemBatches:\n{}", names);
+
+
+			ExecutionOrderRecalculationNeeded_ = false;
+		}
+	}
 
 
 	void UpdatePhysicsSystems(const double deltaTime)
@@ -299,6 +321,21 @@ protected:
 			UpdateSystemBatch(deltaTime, systemRunBatch);
 		}
 	}
+
+	void DestroySystems() const
+	{
+		for (size_t i = 0; i < Systems.size(); i++)
+		{
+			Systems[i]->Destroy();
+		}
+	}
+
+	void ForceStopTaskRunner()
+	{
+		ThreadRunner.ForceStopTaskRunner();
+	}
+
+private:
 
 	void UpdateSystemBatch(const double deltaTime, const auto& systemRunBatch)
 	{
@@ -334,35 +371,6 @@ protected:
 			}
 		}
 		ThreadRunner.RunAllTasks();
-	}
-
-	void ManagerUpdate()
-	{
-		if (!WorldSharedBetweenManagers->IsCurrentComposition(CurrentWorldCompositionNumber_))
-		{
-			ExecutionOrderRecalculationNeeded_ = true;
-			CurrentWorldCompositionNumber_ = WorldSharedBetweenManagers->GetCurrentComposition();
-		}
-
-		if (ExecutionOrderRecalculationNeeded_)
-		{
-			fmt::println("Rebuilding system execute order batches:");
-			PhysicsSystemBatches = ReorderSystems(SystemType::PhysicsSystem);
-			RegularSystemBatches = ReorderSystems(SystemType::System);
-			RenderSystemBatches = ReorderSystems(SystemType::RenderSystem);
-
-			std::string names = CompilePhysicsBatchNames(PhysicsSystemBatches);
-			fmt::println("PhysicsSystemBatches:\n{}", names);
-
-			names = CompileSystemBatchNames(RegularSystemBatches);
-			fmt::println("RegularSystemBatches:\n{}", names);
-
-			names = CompileRenderBatchNames(RenderSystemBatches);
-			fmt::println("RenderSystemBatches:\n{}", names);
-
-
-			ExecutionOrderRecalculationNeeded_ = false;
-		}
 	}
 
 	std::vector<std::vector<SystemID>> ReorderSystems(SystemType systemType)
@@ -681,21 +689,6 @@ protected:
 		return systemBatches;
 	}
 
-	void DestroySystems() const
-	{
-		for (size_t i = 0; i < Systems.size(); i++)
-		{
-			Systems[i]->Destroy();
-		}
-	}
-
-	void ForceStopTaskRunner()
-	{
-		ThreadRunner.ForceStopTaskRunner();
-	}
-
-private:
-
 	struct SystemDependencies
 	{
 		SystemID system;
@@ -748,6 +741,10 @@ private:
 	{
 		return CompileBatchNames(RenderSystemBatchNames, batch);
 	}
+
+
+//Variables:
+private:
 
 	bool ExecutionOrderRecalculationNeeded_ = false;
 
