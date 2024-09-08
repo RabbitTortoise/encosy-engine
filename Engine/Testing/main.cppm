@@ -7,20 +7,22 @@ module;
 
 export module EncosyTesting;
 
-import EncosyEngine.Interface;
-import EncosyEngine.EncosyCore;
-import EncosyEngine.RenderCore;
-import EncosyEngine.MatrixCalculations;
-import Components.TransformComponent;
-import Components.CameraComponent;
-import Components.MaterialComponent;
-import Components.ModelMatrixComponent;
+import EncosyEngine_EngineCore;
+import EE_Encosy_EncosyCore;
+import EE_RenderCore;
 
-import EncosyCore.ThreadedTaskRunner;
-import RenderCore.MeshLoader;
-import RenderCore.ShaderLoader;
-import RenderCore.TextureLoader;
-import RenderCore.RenderPipelineManager;
+
+import EE_Core_MatrixCalculations;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_CameraComponent;
+import EE_ECS_Components_MaterialComponent;
+import EE_ECS_Components_ModelMatrixComponent;
+
+import EE_Encosy_ThreadedTaskRunner;
+import EE_RenderCore_MeshLoader;
+import EE_RenderCore_ShaderLoader;
+import EE_RenderCore_TextureLoader;
+import EE_RenderCore_RenderPipelineManager;
 
 import <map>;
 import <vector>;
@@ -70,19 +72,19 @@ void InitializeTestEntities()
 	auto textureSetID = EngineRenderCore->RegisterTextureSetForRaytracingUsage(textureSet);
 
 
-	TransformComponent tc = {
+	EE_TransformComponent tc = {
 	.Position = glm::vec3(0,-2,0),
 	.Scale = glm::vec3(10,1,10),
 	.Orientation = glm::quat(glm::vec3(glm::radians(0.0f),0,0)),
 	};
 
-	MaterialComponentRaytracing mc = {};
+	EE_MaterialComponentRaytracing mc = {};
 	mc.TextureSet = textureSetID;
 	mc.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere);
 	mc.TextureRepeat = 1.0f;
 	mc.Color = glm::vec3(1, 1, 1);
 
-	ModelMatrixComponent model = {};
+	EE_ModelMatrixComponent model = {};
 
 	WorldEntityManager->CreateEntityWithData(tc, mc, model);
 

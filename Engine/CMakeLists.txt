@@ -1,5 +1,5 @@
 # Specify minimum supported cmake version and set c++23
-cmake_minimum_required(VERSION 3.28)
+cmake_minimum_required(VERSION 3.30)
 set (CMAKE_CXX_STANDARD    20    CACHE    STRING    "C++ Version"    FORCE)
 set (CXX_SCAN_FOR_MODULES    ON    CACHE    STRING    "Modules"    FORCE)
 
@@ -109,67 +109,72 @@ target_link_libraries(Imgui PUBLIC SDL3::SDL3-static)
 
 # Used sources, Engine
 list(APPEND EncosyEngine_MODULES_SRC
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/Application.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/Interface.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/WindowManager.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/MatrixCalculations.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/SetupCoreECS.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/Profiler.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ProfilerInterface.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Interface/EncosyEngine_EngineCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Interface/EncosyEngine_EncosyCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Interface/EncosyEngine_RenderCore.ixx"
 	
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/TransformComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Core/ECS/InputSystemData.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Profiler/EE_Profiler.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Profiler/EE_ProfilerInterface.ixx"
 
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/EncosyCore.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/EncosyWorld.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/EntityManager.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/ComponentManager.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SystemManager.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/ThreadedTaskRunner.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/Entity.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SystemBase.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/System.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SystemThreaded.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/EntityTypeStorage.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/ComponentTypeStorage.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore/SharedBetweenManagers.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_EngineCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_WindowManager.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_WM_WindowInstance.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_MatrixCalculations.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_SetupCoreECS.ixx"
 
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCore.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderThread.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderCoreResources.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RaytracingResources.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/RenderPipelineManager.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanTypes.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanInitializers.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanErrorLogger.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanUtilities.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanDescriptors.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanRaytracing.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/VulkanImgui.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/PipelineBuilder.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/AllocationHandler.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/MeshLoader.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/TextureLoader.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ShaderLoader.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/ECS/EE_ECS_Components_TransformComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/ECS/EE_ECS_Systems_InputSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/ECS/EE_ECS_SystemData_InputSystem.ixx"
+
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_EncosyCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_EncosyWorld.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_EntityManager.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_ComponentManager.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_SystemManager.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_ThreadedTaskRunner.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_Entity.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_SystemBase.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_System.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_SystemThreaded.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_EntityTypeStorage.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_ComponentTypeStorage.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_SharedBetweenManagers.ixx"
+
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_RenderThread.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_RenderCoreResources.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_RaytracingResources.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_RenderPipelineManager.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_VulkanTypes.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_VulkanInitializers.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_VulkanErrorLogger.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_VulkanUtilities.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_VulkanDescriptors.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_VulkanRaytracing.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_VulkanImgui.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_PipelineBuilder.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_AllocationHandler.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_MeshLoader.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_TextureLoader.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/EE_RenderCore_ShaderLoader.ixx"
 	
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/MaterialComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/RaytracedRenderSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/CameraControllerSystemData.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/StaticComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/ModelMatrixComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/ECS/ModelMatrixBuilderSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_Systems_RaytracedRenderSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_Systems_ModelMatrixBuilderSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_Systems_CameraControllerSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_SystemData_CameraControllerSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_Components_ModelMatrixComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_Components_CameraComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_Components_MaterialComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/ECS/EE_ECS_Components_StaticComponent.ixx"
 )	
 
 # Used shaders, Engine
 list(APPEND EncosyEngine_SHADERS_SRC
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Gradient.comp"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/RayGeneration.rgen"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/ClosestHit.rchit"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/Miss.rmiss"
-	"${CMAKE_CURRENT_SOURCE_DIR}/RenderCore/Shaders/RaytraceShadow.rmiss"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/Shaders/Gradient.comp"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/Shaders/RayGeneration.rgen"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/Shaders/ClosestHit.rchit"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/Shaders/Miss.rmiss"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/Shaders/RaytraceShadow.rmiss"
 )
 
 # Used sources, Engine Testing
@@ -185,10 +190,11 @@ PUBLIC FILE_SET CXX_MODULES
 FILES 
 ${EncosyEngine_MODULES_SRC} 
 BASE_DIRS 
-${CMAKE_CURRENT_SOURCE_DIR}/EncosyCore 
-${CMAKE_CURRENT_SOURCE_DIR}/Core 
-${CMAKE_CURRENT_SOURCE_DIR}/Systems 
-${CMAKE_CURRENT_SOURCE_DIR}/RenderCore
+"${CMAKE_CURRENT_SOURCE_DIR}/Source/Interface/"
+"${CMAKE_CURRENT_SOURCE_DIR}/Source/Profiler/"
+"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/"
+"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/"
+"${CMAKE_CURRENT_SOURCE_DIR}/Source/RenderCore/"
 )
 
 target_sources(EncosyEngine PUBLIC FILE_SET HEADERS FILES ${stb_image_SRC} BASE_DIRS ${stb_image_DIR})
