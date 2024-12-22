@@ -4,17 +4,18 @@ module;
 
 export module EncosyGame;
 
-import EncosyGame.RotationTest;
-import EncosyGame.StaticTest;
-import EncosyGame.CollisionDemo;
-import EncosyGame.DynamicDemo;
-import EncosyGame.RaytracingTest;
-import EncosyGame.AsteroidField;
-import EncosyEngine.Interface;
+import EncosyEngine_EngineCore;
+
+import EncosyGame_RotationTest;
+import EncosyGame_StaticTest;
+import EncosyGame_CollisionDemo;
+import EncosyGame_DynamicDemo;
+import EncosyGame_RaytracingTest;
+import EncosyGame_AsteroidField;
 
 enum class Scene { RotationTest = 0, StaticTest, CollisionDemo, DynamicDemo, Raytracing, AsteroidField};
 
-Scene ChosenScene = Scene::AsteroidField;
+Scene ChosenScene = Scene::StaticTest;
 bool Fullscreen = false;
 
 export

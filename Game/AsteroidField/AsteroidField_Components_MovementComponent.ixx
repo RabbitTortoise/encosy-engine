@@ -1,7 +1,7 @@
 module;
 #include <glm/glm.hpp>
 
-export module AsteroidField.Components.MovementComponent;
+export module AsteroidField_Components_MovementComponent;
 
 export struct AsteroidFieldMovementComponent
 {

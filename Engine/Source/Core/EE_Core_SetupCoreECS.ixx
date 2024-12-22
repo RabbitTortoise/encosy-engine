@@ -34,7 +34,7 @@ std::vector<EntityOperationResult> InitializeEngineEntities(EntityManager* EM)
 	std::vector<EntityOperationResult> InitializedTypes;
 
 	InitializedTypes.push_back(EM->CreateEntityType<EE_TransformComponent, EE_CameraComponent>("CameraEntity"));
-	InitializedTypes.push_back(EM->CreateEntityType<EE_TransformComponent, EE_MaterialComponentRaytracing>("StaticSceneEntity"));
+	InitializedTypes.push_back(EM->CreateEntityType<EE_TransformComponent, EE_MaterialComponent>("StaticSceneEntity"));
 
 	return InitializedTypes;
 }

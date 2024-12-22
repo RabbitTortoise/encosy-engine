@@ -1,7 +1,7 @@
 module;
 #include <glm/glm.hpp>
 
-export module Demo.Components.MovementComponent;
+export module RotationTest_Components_MovementComponent.ixx;
 
 export struct MovementComponent
 {

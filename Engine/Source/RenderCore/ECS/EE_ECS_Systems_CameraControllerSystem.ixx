@@ -170,7 +170,7 @@ protected:
 			transformComponent.Position += direction * static_cast<float>(speed * speedMultiplier * deltaTime);
 			cameraComponent.View = MatrixCalculations::CalculateLookAtMatrix(transformComponent.Position, transformComponent.Position + cameraComponent.Front, cameraComponent.Up);
 
-			//fmt::println("POS:  {},{},{}", transformComponent.Position.x, transformComponent.Position.y, transformComponent.Position.z);
+		//	//fmt::println("POS:  {},{},{}", transformComponent.Position.x, transformComponent.Position.y, transformComponent.Position.z);
 		}
 	}
 	

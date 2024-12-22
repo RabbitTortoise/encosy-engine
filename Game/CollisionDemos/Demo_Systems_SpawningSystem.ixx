@@ -3,23 +3,22 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module Demo.Systems.SpawningSystem;
+export module Demo_Systems_SpawningSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
-import RenderCore.TextureLoader;
-import RenderCore.MeshLoader;
-import RenderCore.VulkanTypes;
-import Demo.SystemData.SpawningSystem;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
+import EE_RenderCore_TextureLoader;
+import EE_RenderCore_MeshLoader;
+import EE_RenderCore_VulkanTypes;
+import Demo_SystemData_SpawningSystem;
 
-import Components.TransformComponent;
-import Components.MaterialComponent;
-import Components.ModelMatrixComponent;
-import Demo.Components.SphereColliderComponent;
-import Demo.Components.FollowerComponent;
-import Demo.Components.MovementComponent;
-import Demo.Components.FollowerComponent;
-import Demo.Components.LeaderComponent;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_MaterialComponent;
+import Demo_Components_SphereColliderComponent;
+import Demo_Components_FollowerComponent;
+import Demo_Components_MovementComponent;
+import Demo_Components_FollowerComponent;
+import Demo_Components_LeaderComponent;
 
 import <map>;
 import <span>;
@@ -32,8 +31,6 @@ import <numeric>;
 
 export class SpawningSystem : public SystemThreaded
 {
-	friend class SystemManager;
-
 	SystemThreadedOptions ThreadedRunOptions =
 	{
 	.PreferRunAlone = false,
@@ -47,7 +44,6 @@ public:
 	SpawningSystem(TextureLoader* textureLoader, MeshLoader* meshLoader) : MainTextureLoader(textureLoader), MainMeshLoader(meshLoader) {}
 	~SpawningSystem() {}
 
-protected:
 	void Init() override
 	{
 		Type = SystemType::System;
@@ -98,9 +94,9 @@ protected:
 		{
 			auto systemData = GetSystemData(&SpawningSystemDataComponent);
 			
-			TransformComponent ltc = GetCurrentEntityComponent(thread, &TransformComponents);
+			EE_TransformComponent ltc = GetCurrentEntityComponent(thread, &TransformComponents);
 			LeaderComponent llc = GetCurrentEntityComponent(thread, &LeaderComponents);
-			MaterialComponentRaytracing mcRay = GetCurrentEntityComponent(thread, &MaterialComponents);
+			EE_MaterialComponent mcRay = GetCurrentEntityComponent(thread, &MaterialComponents);
 
 			std::uniform_real_distribution<float> distrX(systemData.PlayRegionMin.x, systemData.PlayRegionMax.x);
 			std::uniform_real_distribution<float> distrY(systemData.PlayRegionMin.y, systemData.PlayRegionMax.y);
@@ -109,13 +105,12 @@ protected:
 			glm::vec3 randPos = glm::vec3(distrX(Gen), distrY(Gen),distrZ(Gen));
 			glm::vec3 direction = randPos - ltc.Position;
 
-			TransformComponent newtc = ltc;
+			EE_TransformComponent newtc = ltc;
 			newtc.Position.x += direction.x / 10.0f;
 			newtc.Position.y += direction.y / 10.0f;
 			newtc.Position.z += direction.z / 10.0f;
 			newtc.Scale = glm::vec3(Scale, Scale, Scale);
 
-			ModelMatrixComponent newmatrix = {};
 			FollowerComponent newfc = { llc.LeaderID };
 			MovementComponent newmov = { {}, {Speed} };
 			SphereColliderComponent newsphere = SphereColliderComponent(CollisionRadius, false);
@@ -125,7 +120,7 @@ protected:
 			mcRay.TextureRepeat = mcRay.TextureRepeat;
 			mcRay.Color = glm::vec3(1, 1, 1);
 
-			CreateEntityWithData(FollowerType, newtc, mcRay, newmatrix, newfc, newmov, newsphere);
+			CreateEntityWithData(FollowerType, newtc, mcRay, newfc, newmov, newsphere);
 		}
 	}
 
@@ -142,9 +137,9 @@ private:
 
 	ReadOnlySystemDataStorage<SpawningSystemData> SpawningSystemDataComponent; 
 
-	ReadOnlyComponentStorage<TransformComponent> TransformComponents;
+	ReadOnlyComponentStorage<EE_TransformComponent> TransformComponents;
 	ReadOnlyComponentStorage<LeaderComponent> LeaderComponents;
-	ReadOnlyComponentStorage<MaterialComponentRaytracing> MaterialComponents;
+	ReadOnlyComponentStorage<EE_MaterialComponent> MaterialComponents;
 
 	EntityType LeaderType;
 	EntityType FollowerType;

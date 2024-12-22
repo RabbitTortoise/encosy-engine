@@ -2,7 +2,7 @@ module;
 
 export module EncosyEngine_EngineCore;
 
-import EE_Core_EngineCore;
+import EE_EngineCore;
 import EE_RenderCore;
 
 

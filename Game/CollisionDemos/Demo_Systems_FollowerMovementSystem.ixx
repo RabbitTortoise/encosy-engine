@@ -3,14 +3,14 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module Demo.Systems.FollowerMovementSystem;
+export module Demo_Systems_FollowerMovementSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
-import Components.TransformComponent;
-import Demo.Components.MovementComponent;
-import Demo.Components.FollowerComponent;
-import Demo.Components.LeaderComponent;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
+import EE_ECS_Components_TransformComponent;
+import Demo_Components_MovementComponent;
+import Demo_Components_FollowerComponent;
+import Demo_Components_LeaderComponent;
 
 import <map>;
 import <span>;
@@ -22,7 +22,6 @@ import <numeric>;
 
 export class FollowerMovementSystem : public SystemThreaded
 {
-	friend class SystemManager;
 
 public:
 	FollowerMovementSystem() {}
@@ -37,7 +36,6 @@ public:
 	.IgnoreThreadSaveFunctions = false,
 	};
 
-protected:
 	void Init() override
 	{
 		Type = SystemType::PhysicsSystem;
@@ -73,7 +71,7 @@ protected:
 
 	void UpdatePerEntity(int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
-		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
+		EE_TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		MovementComponent& mc = GetCurrentEntityComponent(thread, &ThreadMovementComponents);
 		FollowerComponent fc = GetCurrentEntityComponent(thread, &FollowerComponents);
 
@@ -82,7 +80,7 @@ protected:
 		const auto& leaders = LeadersPerID.find(fc.LeaderToFollow)->second;
 		for (auto leader : leaders)
 		{
-			TransformComponent ltc = LeaderTransformComponents.Storage[leader];
+			EE_TransformComponent ltc = LeaderTransformComponents.Storage[leader];
 			glm::vec3 dirToTarget = ltc.Position - tc.Position;
 			float len = glm::length(dirToTarget);
 			if (len < closestLen)
@@ -91,7 +89,7 @@ protected:
 				closestIndex = leader;
 			}
 		}
-		TransformComponent ltc = LeaderTransformComponents.Storage[closestIndex];
+		EE_TransformComponent ltc = LeaderTransformComponents.Storage[closestIndex];
 		glm::vec3 dirToTarget = glm::normalize(ltc.Position - tc.Position);
 		mc.Direction += dirToTarget;
 
@@ -107,14 +105,14 @@ private:
 	EntityType LeaderType;
 	std::map<int, std::vector<size_t>> LeadersPerID;
 
-	WriteReadComponentStorage<TransformComponent> TransformComponents;
+	WriteReadComponentStorage<EE_TransformComponent> TransformComponents;
 	WriteReadComponentStorage<MovementComponent> MovementComponents;
 	ReadOnlyComponentStorage<FollowerComponent> FollowerComponents;
 
 	ReadOnlyAlwaysFetchedStorage<LeaderComponent> LeaderComponents;
-	ReadOnlyAlwaysFetchedStorage<TransformComponent> LeaderTransformComponents;
+	ReadOnlyAlwaysFetchedStorage<EE_TransformComponent> LeaderTransformComponents;
 
 
-	ThreadComponentStorage<TransformComponent> ThreadTransformComponents;
+	ThreadComponentStorage<EE_TransformComponent> ThreadTransformComponents;
 	ThreadComponentStorage<MovementComponent> ThreadMovementComponents;
 };

@@ -6,7 +6,7 @@ export module EE_ECS_Components_MaterialComponent;
 
 import EE_RenderCore_VulkanTypes;
 
-export struct EE_MaterialComponentRaytracing
+export struct EE_MaterialComponent
 {
 	TextureID TextureSet;
 	MeshID RenderMesh;

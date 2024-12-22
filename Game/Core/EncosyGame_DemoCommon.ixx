@@ -1,11 +1,11 @@
 module;
 #include <glm/glm.hpp>
 
-export module EncosyGame.DemoCommon;
+export module EncosyGame_DemoCommon;
 
-import RenderCore.TextureLoader;
-import RenderCore.VulkanTypes;
-import EncosyEngine.RenderCore;
+import EE_RenderCore_TextureLoader;
+import EE_RenderCore_VulkanTypes;
+import EncosyEngine_RenderCore;
 
 import <vector>;
 

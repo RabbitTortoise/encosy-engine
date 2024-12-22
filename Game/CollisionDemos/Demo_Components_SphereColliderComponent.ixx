@@ -1,8 +1,8 @@
 module;
 
-export module Demo.Components.SphereColliderComponent;
+export module Demo_Components_SphereColliderComponent;
 
-import EncosyCore.Entity;
+import EE_Encosy_Entity;
 
 export struct SphereColliderComponent
 {

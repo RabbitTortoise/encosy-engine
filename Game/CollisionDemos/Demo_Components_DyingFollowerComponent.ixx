@@ -1,8 +1,6 @@
 module;
 
-export module Demo.Components.DyingFollowerComponent;
-
-import EncosyCore.Entity;
+export module Demo_Components_DyingFollowerComponent;
 
 export struct DyingFollowerComponent
 {

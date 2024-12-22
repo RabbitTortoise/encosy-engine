@@ -1,7 +1,7 @@
 module;
 #include <glm/vec3.hpp>
 
-export module Demo.Components.LeaderComponent;
+export module Demo_Components_LeaderComponent;
 
 export struct LeaderComponent
 {

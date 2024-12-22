@@ -2,6 +2,14 @@ module;
 #include <vulkan/vulkan.h>
 #include <fmt/core.h>
 
+//#define GLM_FORCE_INTRINSICS
+//#define GLM_ENABLE_EXPERIMENTAL
+//#include <glm/glm.hpp>              // Include glm
+//#include <glm/gtx/transform.hpp>    // glm transform functions.
+//#include <glm/gtc/quaternion.hpp>	// Include quaternions
+//#include <glm/gtx/quaternion.hpp>	// Include quaternions
+#include <xmmintrin.h>
+
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
@@ -109,7 +117,7 @@ protected:
 		}
 
 		ThreadVariablesVector = std::vector<ThreadVariables>(threadCount, ThreadVariables());
-	}; 
+	}
 
 	void Update(const int thread, const double deltaTime) override
 	{
@@ -136,13 +144,13 @@ protected:
 				ThreadVariablesVector[thread].InstaceIndexOffset += this->GetThreadEntitiesCount(i);
 			}
 		}
-	};
+	}
 
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		EE_TransformComponent transformComponent = GetCurrentEntityComponent(thread, &TransformComponents);
 		//EE_ModelMatrixComponent matrixComponent = GetCurrentEntityComponent(thread, &ModelMatrixComponents);
-		EE_MaterialComponentRaytracing raytracingComponent = GetCurrentEntityComponent(thread, &MaterialComponents);
+		EE_MaterialComponent raytracingComponent = GetCurrentEntityComponent(thread, &MaterialComponents);
 
 		uint32_t instanceIndex = static_cast<uint32_t>(ThreadVariablesVector[thread].InstaceIndexOffset + ThreadVariablesVector[thread].CurrentInstance);
 
@@ -150,6 +158,7 @@ protected:
 		VkTransformMatrixKHR transform;
 
 		glm::mat4 temp = glm::transpose(MatrixCalculations::CalculateModelMatrix(transformComponent));
+		//glm::mat4 temp = glm::transpose(MatrixCalculations::CalculateModelMatrixTest(transformComponent));
 		memcpy(&transform, &temp, sizeof(VkTransformMatrixKHR));
 
 		VkAccelerationStructureDeviceAddressInfoKHR addressInfo{ VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_DEVICE_ADDRESS_INFO_KHR };
@@ -530,7 +539,7 @@ private:
 
 	// Component Storages
 	ReadOnlyComponentStorage<EE_TransformComponent> TransformComponents;
-	ReadOnlyComponentStorage<EE_MaterialComponentRaytracing> MaterialComponents;
+	ReadOnlyComponentStorage<EE_MaterialComponent> MaterialComponents;
 	ReadOnlyAlwaysFetchedStorage<EE_CameraComponent> CameraComponents;
 	ReadOnlyAlwaysFetchedStorage<EE_TransformComponent> CameraTransformComponents;
 	ReadOnlySystemDataStorage<EE_CameraControllerSystemData> CameraSystemDataStorage;

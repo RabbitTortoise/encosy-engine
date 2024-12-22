@@ -3,14 +3,14 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module Demo.Systems.LeaderMovementSystem;
+export module Demo_Systems_LeaderMovementSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
-import Components.TransformComponent;
-import Demo.Components.MovementComponent;
-import Demo.Components.LeaderComponent;
-import Demo.SystemData.SpawningSystem;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
+import EE_ECS_Components_TransformComponent;
+import Demo_Components_MovementComponent;
+import Demo_Components_LeaderComponent;
+import Demo_SystemData_SpawningSystem;
 
 import <map>;
 import <span>;
@@ -20,8 +20,6 @@ import <random>;
 
 export class LeaderMovementSystem : public SystemThreaded
 {
-	friend class SystemManager;
-
 	SystemThreadedOptions ThreadedRunOptions =
 	{
 	.PreferRunAlone = false,
@@ -35,7 +33,6 @@ public:
 	LeaderMovementSystem() {}
 	~LeaderMovementSystem() {}
 
-protected:
 	void Init() override
 	{
 		Type = SystemType::PhysicsSystem;
@@ -61,7 +58,7 @@ protected:
 	}
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
-		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
+		EE_TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		MovementComponent& mc = GetCurrentEntityComponent(thread, &ThreadMovementComponents);
 		LeaderComponent& lc = GetCurrentEntityComponent(thread, &ThreadLeaderComponents);
 		auto systemData = GetSystemData(&SpawningSystemDataComponent);
@@ -94,11 +91,11 @@ protected:
 private:
 
 	WriteReadComponentStorage<LeaderComponent> LeaderComponents;
-	WriteReadComponentStorage<TransformComponent> TransformComponents;
+	WriteReadComponentStorage<EE_TransformComponent> TransformComponents;
 	WriteReadComponentStorage<MovementComponent> MovementComponents;
 
 	ThreadComponentStorage<LeaderComponent> ThreadLeaderComponents;
-	ThreadComponentStorage<TransformComponent> ThreadTransformComponents;
+	ThreadComponentStorage<EE_TransformComponent> ThreadTransformComponents;
 	ThreadComponentStorage<MovementComponent> ThreadMovementComponents;
 
 	ReadOnlySystemDataStorage<SpawningSystemData> SpawningSystemDataComponent;

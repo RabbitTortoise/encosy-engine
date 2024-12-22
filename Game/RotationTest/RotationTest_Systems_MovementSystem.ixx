@@ -3,17 +3,17 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module StressTest.Systems.MovementSystem;
+export module RotationTest_Systems_MovementSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.System;
-import Components.TransformComponent;
-import Components.StaticComponent;
-import StressTest.Components.MovementComponent;
-import Components.CameraComponent;
-import EncosyEngine.MatrixCalculations;
-import SystemData.InputSystem;
-import SystemData.CameraControllerSystem;
+import EE_Encosy_Entity;
+import EE_Encosy_System;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_StaticComponent;
+import RotationTest_Components_MovementComponent.ixx;
+import EE_ECS_Components_CameraComponent;
+import EE_Core_MatrixCalculations;
+import EE_ECS_SystemData_InputSystem;
+import EE_ECS_SystemData_CameraControllerSystem;
 
 import <map>;
 import <span>;
@@ -28,13 +28,12 @@ float RandomNumber0_1()
 
 export class MovementSystem : public System
 {
-	friend class SystemManager;
 
 public:
 	MovementSystem() {}
 	~MovementSystem() {}
 
-protected:
+
 	void Init() override 
 	{
 		Type = SystemType::PhysicsSystem;
@@ -49,19 +48,19 @@ protected:
 		AddSystemDataForReading(&InputSystemDataStorage);
 		AddSystemDataForReading(&CameraControllerSystemDataStorage);
 
-		AddForbiddenComponentQuery<StaticComponent>();
-		AddForbiddenComponentQuery<CameraComponent>();
+		AddForbiddenComponentQuery<EE_StaticComponent>();
+		AddForbiddenComponentQuery<EE_CameraComponent>();
 	}
 	void PreUpdate(const double deltaTime) override {}
 	void Update(const double deltaTime) override
 	{
-		CameraControllerSystemData csData = GetSystemData(&CameraControllerSystemDataStorage);
+		EE_CameraControllerSystemData csData = GetSystemData(&CameraControllerSystemDataStorage);
 		mainCamera = GetEntityComponent(csData.MainCamera, cameraType, &CameraEntityComponents);
 	}
 	void UpdatePerEntity(const double deltaTime, Entity entity, EntityType entityType) override
 	{
-		InputSystemData input = GetSystemData(&InputSystemDataStorage);
-		TransformComponent& tc = GetCurrentEntityComponent(&TransformComponents);
+		EE_InputSystemData input = GetSystemData(&InputSystemDataStorage);
+		EE_TransformComponent& tc = GetCurrentEntityComponent(&TransformComponents);
 		MovementComponent& mc = GetCurrentEntityComponent(&MovementComponents);
 
 		if (input.Spacebar) { return; } // Continue only if spacebar is not pressed
@@ -80,13 +79,13 @@ protected:
 
 private:
 
-	CameraComponent mainCamera;
+	EE_CameraComponent mainCamera;
 	EntityType cameraType = -1;
 
-	WriteReadComponentStorage<TransformComponent> TransformComponents;
+	WriteReadComponentStorage<EE_TransformComponent> TransformComponents;
 	WriteReadComponentStorage<MovementComponent> MovementComponents;
 
-	ReadOnlyAlwaysFetchedStorage<CameraComponent> CameraEntityComponents;
-	ReadOnlySystemDataStorage<InputSystemData> InputSystemDataStorage;
-	ReadOnlySystemDataStorage<CameraControllerSystemData> CameraControllerSystemDataStorage;
+	ReadOnlyAlwaysFetchedStorage<EE_CameraComponent> CameraEntityComponents;
+	ReadOnlySystemDataStorage<EE_InputSystemData> InputSystemDataStorage;
+	ReadOnlySystemDataStorage<EE_CameraControllerSystemData> CameraControllerSystemDataStorage;
 };

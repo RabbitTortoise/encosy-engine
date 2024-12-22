@@ -8,7 +8,7 @@ module;
 export module EncosyTesting;
 
 import EncosyEngine_EngineCore;
-import EE_Encosy_EncosyCore;
+import EE_EncosyCore;
 import EE_RenderCore;
 
 
@@ -78,7 +78,7 @@ void InitializeTestEntities()
 	.Orientation = glm::quat(glm::vec3(glm::radians(0.0f),0,0)),
 	};
 
-	EE_MaterialComponentRaytracing mc = {};
+	EE_MaterialComponent mc = {};
 	mc.TextureSet = textureSetID;
 	mc.RenderMesh = MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere);
 	mc.TextureRepeat = 1.0f;

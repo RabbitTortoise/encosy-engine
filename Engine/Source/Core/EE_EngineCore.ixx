@@ -3,10 +3,10 @@ module;
 #include <SDL3/SDL.h>
 #include <fmt/core.h>
 
-export module EE_Core_EngineCore;
+export module EE_EngineCore;
 
 import EE_Core_WindowManager;
-import EE_Encosy_EncosyCore;
+import EE_EncosyCore;
 import EE_RenderCore;
 import EE_ProfilerInterface;
 

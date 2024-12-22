@@ -1,5 +1,5 @@
 module;
-export module EE_Encosy_EncosyCore;
+export module EE_EncosyCore;
 
 // Encosy World
 export import EE_Encosy_EncosyWorld;

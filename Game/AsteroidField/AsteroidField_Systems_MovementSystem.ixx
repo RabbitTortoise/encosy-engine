@@ -3,14 +3,14 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module AsteroidField.Systems.MovementSystem;
+export module AsteroidField_Systems_MovementSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
-import Components.TransformComponent;
-import AsteroidField.Components.MovementComponent;
-import EncosyEngine.MatrixCalculations;
-import SystemData.InputSystem;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
+import EE_ECS_Components_TransformComponent;
+import AsteroidField_Components_MovementComponent;
+import EE_Core_MatrixCalculations;
+import EE_ECS_SystemData_InputSystem;
 
 import <map>;
 import <span>;
@@ -22,7 +22,6 @@ import <numeric>;
 
 export class AsteroidFieldMovementSystem : public SystemThreaded
 {
-	friend class SystemManager;
 
 public:
 	AsteroidFieldMovementSystem() {}
@@ -37,7 +36,6 @@ public:
 	.IgnoreThreadSaveFunctions = false,
 	};
 
-protected:
 	void Init() override
 	{
 		Type = SystemType::System;
@@ -86,7 +84,7 @@ export struct AsteroidFieldMovementComponent
 			return;
 		}
 
-		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
+		EE_TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		AsteroidFieldMovementComponent& mc = GetCurrentEntityComponent(thread, &ThreadMovementComponents);
 
 		// Rotate towards center
@@ -126,15 +124,15 @@ export struct AsteroidFieldMovementComponent
 
 private:
 
-	WriteReadComponentStorage<TransformComponent> TransformComponents;
+	WriteReadComponentStorage<EE_TransformComponent> TransformComponents;
 	WriteReadComponentStorage<AsteroidFieldMovementComponent> MovementComponents;
 
-	ThreadComponentStorage<TransformComponent> ThreadTransformComponents;
+	ThreadComponentStorage<EE_TransformComponent> ThreadTransformComponents;
 	ThreadComponentStorage<AsteroidFieldMovementComponent> ThreadMovementComponents;
 
-	ReadOnlySystemDataStorage<InputSystemData> InputSystemDataStorage;
+	ReadOnlySystemDataStorage<EE_InputSystemData> InputSystemDataStorage;
 
-	InputSystemData InputData;
+	EE_InputSystemData InputData;
 
 	bool PauseToggled = false;
 	bool Paused = false;

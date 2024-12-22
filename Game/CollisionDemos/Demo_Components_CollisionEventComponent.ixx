@@ -1,8 +1,8 @@
 module;
 
-export module Demo.Components.CollisionEventComponent;
+export module Demo_Components_CollisionEventComponent;
 
-import EncosyCore.Entity;
+import EE_Encosy_Entity;
 
 
 export struct CollisionEventComponent

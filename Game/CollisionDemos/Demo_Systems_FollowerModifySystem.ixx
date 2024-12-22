@@ -2,20 +2,20 @@ module;
 #include <fmt/core.h>
 #include <glm/vec3.hpp>
 
-export module Demo.Systems.FollowerModifySystem;
+export module Demo_Systems_FollowerModifySystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
-import RenderCore.MeshLoader;
-import RenderCore.VulkanTypes;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
+import EE_RenderCore_MeshLoader;
+import EE_RenderCore_VulkanTypes;
 
-import Components.TransformComponent;
-import Components.MaterialComponent;
-import Demo.Components.FollowerComponent;
-import Demo.Components.MovementComponent;
-import Demo.Components.SphereColliderComponent;
-import Demo.Components.CollisionEventComponent;
-import Demo.Components.DyingFollowerComponent;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_MaterialComponent;
+import Demo_Components_FollowerComponent;
+import Demo_Components_MovementComponent;
+import Demo_Components_SphereColliderComponent;
+import Demo_Components_CollisionEventComponent;
+import Demo_Components_DyingFollowerComponent;
 
 
 import <map>;
@@ -34,7 +34,6 @@ export class FollowerModifySystem : public SystemThreaded
 		EntityType type;
 	};
 
-	friend class SystemManager;
 
 	SystemThreadedOptions ThreadedRunOptions =
 	{
@@ -53,7 +52,7 @@ public:
 	}
 	~FollowerModifySystem() {}
 
-protected:
+
 	void Init() override
 	{
 		Type = SystemType::PhysicsSystem;
@@ -83,8 +82,8 @@ protected:
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
 		SphereColliderComponent& ownCollider = GetCurrentEntityComponent(thread, &ThreadSphereColliderComponents);
-		TransformComponent& ownTransform = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
-		MaterialComponentRaytracing& ownMaterial = GetCurrentEntityComponent(thread, &ThreadRaytraceMaterialComponents);
+		EE_TransformComponent& ownTransform = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
+		EE_MaterialComponent& ownMaterial = GetCurrentEntityComponent(thread, &ThreadRaytraceMaterialComponents);
 
 		size_t vectorIndex = 0;
 		float scaledRadius = ownTransform.Scale.x * ownCollider.Radius;
@@ -98,7 +97,7 @@ protected:
 				if (collisionEvent.CollisionDepth < scaledRadius / 1.5f) { continue; }
 				if (HasComponentType<DyingFollowerComponent>(collisionEvent.B)) { continue; }
 
-				auto otherMaterial = GetReadOnlyComponentFromEntity<MaterialComponentRaytracing>(collisionEvent.B);
+				auto otherMaterial = GetReadOnlyComponentFromEntity<EE_MaterialComponent>(collisionEvent.B);
 				if (otherMaterial.TextureSet == ownMaterial.TextureSet) { continue; }
 
 				DyingFollowerComponent newDc;
@@ -120,12 +119,12 @@ protected:
 private:
 
 	WriteReadComponentStorage<SphereColliderComponent> SphereColliderComponents;
-	WriteReadComponentStorage<TransformComponent> TransformComponents;
-	WriteReadComponentStorage<MaterialComponentRaytracing> RaytraceMaterialComponents;
+	WriteReadComponentStorage<EE_TransformComponent> TransformComponents;
+	WriteReadComponentStorage<EE_MaterialComponent> RaytraceMaterialComponents;
 
 	ThreadComponentStorage<SphereColliderComponent> ThreadSphereColliderComponents;
-	ThreadComponentStorage<TransformComponent> ThreadTransformComponents;
-	ThreadComponentStorage<MaterialComponentRaytracing> ThreadRaytraceMaterialComponents;
+	ThreadComponentStorage<EE_TransformComponent> ThreadTransformComponents;
+	ThreadComponentStorage<EE_MaterialComponent> ThreadRaytraceMaterialComponents;
 
 	ReadOnlyComponentStorage<CollisionEventComponent> CollisionEvents;
 

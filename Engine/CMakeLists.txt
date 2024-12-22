@@ -10,19 +10,36 @@ add_compile_options(
     $<$<CONFIG:RelWithDebInfo>:/MTd>
     $<$<CONFIG:Release>:/MT>
 )
+# Enable instrincic
+add_compile_options(
+    $<$<CONFIG:>:/Oi>
+    $<$<CONFIG:Debug>:/Oi>
+    $<$<CONFIG:RelWithDebInfo>:/Oi>
+    $<$<CONFIG:Release>:/Oi>
+)
+# Enable Streaming SIMD Extensions 2 (X86) (/arch:SSE2)
+add_compile_options(
+    $<$<CONFIG:>:/arch:SSE2>
+    $<$<CONFIG:Debug>:/arch:SSE2>
+    $<$<CONFIG:RelWithDebInfo>:/arch:SSE2>
+    $<$<CONFIG:Release>:/arch:SSE2>
+)
 
 # Set the project (solution name)
 project(
 	Encosy
-	VERSION 24.2.25
+	VERSION 24.9.16
     DESCRIPTION "Data-oriented game engine"
 	LANGUAGES CXX
 )
 
 #GLM options
-set (GLM_ENABLE_CXX_20 "Enable C++ 20" ON    CACHE    BOOL    "GLM"    FORCE)
-
-#GLM options
+set (GLM_ENABLE_CXX_20    ON    CACHE    BOOL    "GLM"    FORCE) 
+set (GLM_ENABLE_SIMD_SSE2    ON    CACHE    BOOL    "GLM"    FORCE) 
+set (GLM_ENABLE_SIMD_SSE3    ON    CACHE    BOOL    "GLM"    FORCE) 
+set (GLM_ENABLE_SIMD_SSE4_1    ON    CACHE    BOOL    "GLM"    FORCE) 
+set (GLM_ENABLE_SIMD_SSE4_2    ON    CACHE    BOOL    "GLM"    FORCE) 
+set (GLM_ENABLE_SIMD_SSSE3    ON    CACHE    BOOL    "GLM"    FORCE) 
 set (FMT_MODULE    OFF    CACHE    BOOL    "FMT"    FORCE)
 
 # Assimp options
@@ -116,7 +133,7 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Profiler/EE_Profiler.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Profiler/EE_ProfilerInterface.ixx"
 
-	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_EngineCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_EngineCore.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_WindowManager.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_WM_WindowInstance.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/EE_Core_MatrixCalculations.ixx"
@@ -126,7 +143,7 @@ list(APPEND EncosyEngine_MODULES_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/ECS/EE_ECS_Systems_InputSystem.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Core/ECS/EE_ECS_SystemData_InputSystem.ixx"
 
-	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_EncosyCore.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_EncosyCore.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_EncosyWorld.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_EntityManager.ixx"
 	"${CMAKE_CURRENT_SOURCE_DIR}/Source/Encosy/EE_Encosy_ComponentManager.ixx"

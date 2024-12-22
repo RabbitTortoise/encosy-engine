@@ -2,26 +2,25 @@ module;
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-export module EncosyGame.RaytracingTest;
+export module EncosyGame_RaytracingTest;
 
-import EncosyEngine.Interface;
-import EncosyEngine.EncosyCore;
-import EncosyEngine.RenderCore;
+import EncosyEngine_EngineCore;
+import EncosyEngine_EncosyCore;
+import EncosyEngine_RenderCore;
 
-import Components.TransformComponent;
-import Components.MaterialComponent;
-import Components.ModelMatrixComponent;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_MaterialComponent;
+import EE_ECS_Components_ModelMatrixComponent;
 
-import StressTest.Components.MovementComponent;
-import StressTest.Systems.MovementSystem;
-import StressTest.Systems.MovementSystemThreaded;
+import RotationTest_Components_MovementComponent.ixx;
+import RotationTest_Systems_MovementSystemThreaded;
 
-import RenderCore.MeshLoader;
-import RenderCore.TextureLoader;
-import RenderCore.RenderPipelineManager;
-import RenderCore.VulkanTypes;
+import EE_RenderCore_MeshLoader;
+import EE_RenderCore_TextureLoader;
+import EE_RenderCore_RenderPipelineManager;
+import EE_RenderCore_VulkanTypes;
 
-import EncosyGame.DemoCommon;
+import EncosyGame_DemoCommon;
 
 import <map>;
 import <vector>;
@@ -168,7 +167,8 @@ export void InitRaytracingTest(int testDimensionsX, int testDimensionsY, int tes
 	// Textures
 	std::vector<PBRTextureSet> textureSets;
 	std::vector<TextureSetID> textureSetIDs;
-	CreateAsteroidFieldTextures(MainTextureLoader, EngineRenderCore, textureSets, textureSetIDs);
+	CreateTextures(MainTextureLoader, EngineRenderCore, textureSets, textureSetIDs);
+	//CreateAsteroidFieldTextures(MainTextureLoader, EngineRenderCore, textureSets, textureSetIDs);
 
 	EngineRenderCore->RegisterMeshForRaytracingUsage(rock);
 	EngineRenderCore->RegisterMeshForRaytracingUsage(rock2);
@@ -189,12 +189,11 @@ export void InitRaytracingTest(int testDimensionsX, int testDimensionsY, int tes
 
 
 	// Movement System
-	WorldSystemManager->AddSystem<MovementSystemThreaded>("MovementSystem");
+	WorldSystemManager->AddSystem<RotationTest_MovementSystemThreaded>("MovementSystem");
 
-	ModelMatrixComponent matrix = {};
-	TransformComponent tc = {};
+	EE_TransformComponent tc = {};
 	MovementComponent movc = {};
-	MaterialComponentRaytracing mcRay = {};
+	EE_MaterialComponent mcRay = {};
 
 	float dist = 2.0f;
 
@@ -237,7 +236,7 @@ export void InitRaytracingTest(int testDimensionsX, int testDimensionsY, int tes
 				mcRay.TextureRepeat = 1.0f;
 				mcRay.Color = glm::vec3(1, 1, 1);
 			
-				WorldEntityManager->CreateEntityWithData(tc, movc, matrix, mcRay);
+				WorldEntityManager->CreateEntityWithData(tc, movc, mcRay);
 
 				zCur -= dist;
 			}

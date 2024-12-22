@@ -3,13 +3,13 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module Demo.Systems.FollowerKillingSystem;
+export module Demo_Systems_FollowerKillingSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
 
-import Components.TransformComponent;
-import Demo.Components.DyingFollowerComponent;
+import EE_ECS_Components_TransformComponent;
+import Demo_Components_DyingFollowerComponent;
 
 
 import <map>;
@@ -21,8 +21,6 @@ import <iostream>;
 
 export class FollowerKillingSystem : public SystemThreaded
 {
-
-	friend class SystemManager;
 
 	SystemThreadedOptions ThreadedRunOptions =
 	{
@@ -37,7 +35,7 @@ public:
 	FollowerKillingSystem() {}
 	~FollowerKillingSystem() {}
 
-protected:
+
 	void Init() override
 	{
 		Type = SystemType::System;

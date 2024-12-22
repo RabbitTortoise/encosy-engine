@@ -2,26 +2,26 @@ module;
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-export module EncosyGame.AsteroidField;
+export module EncosyGame_AsteroidField;
 
-import EncosyEngine.Interface;
-import EncosyEngine.EncosyCore;
-import EncosyEngine.RenderCore;
+import EncosyEngine_EngineCore;
+import EncosyEngine_EncosyCore;
+import EncosyEngine_RenderCore;
 
-import Components.TransformComponent;
-import Components.MaterialComponent;
-import Components.ModelMatrixComponent;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_MaterialComponent;
+import EE_ECS_Components_ModelMatrixComponent;
 
-import AsteroidField.Systems.MovementSystem;
-import AsteroidField.Components.MovementComponent;
+import AsteroidField_Systems_MovementSystem;
+import AsteroidField_Components_MovementComponent;
 
-import RenderCore.MeshLoader;
-import RenderCore.TextureLoader;
-import RenderCore.RenderPipelineManager;
-import RenderCore.VulkanTypes;
-import RenderCore.Resources;
+import EE_RenderCore_MeshLoader;
+import EE_RenderCore_TextureLoader;
+import EE_RenderCore_RenderPipelineManager;
+import EE_RenderCore_VulkanTypes;
+import EE_RenderCore_Resources;
 
-import EncosyGame.DemoCommon;
+import EncosyGame_DemoCommon;
 
 import <map>;
 import <vector>;
@@ -172,10 +172,10 @@ export void InitAsteroidField(unsigned int asteroidCount)
 	meshIDs.push_back(rock3);
 	meshIDs.push_back(rock4);
 
-	ModelMatrixComponent matrix = {};
-	TransformComponent tc = {};
+	//ModelMatrixComponent matrix = {};
+	EE_TransformComponent tc = {};
 	AsteroidFieldMovementComponent movc = {};
-	MaterialComponentRaytracing ray = {};
+	EE_MaterialComponent ray = {};
 
 
 	float radiusMultiplier = 10.0f;
@@ -193,14 +193,14 @@ export void InitAsteroidField(unsigned int asteroidCount)
 		float textureRepeat = 1.0f + rand3 * 2.0f;
 		MeshID usedMeshId = meshIDs[meshSelect];
 
-		float scale = 0.05f + rand1 * 0.06f;
+		float scale = 0.04f + rand1 * 0.05f;
 		tc = {
 			.Position = glm::vec3(0,0,0),
 			.Scale = glm::vec3(scale,scale,scale),
 			.Orientation = glm::quat(glm::vec3(0,0,0)),
 		};
 		
-		float radius = speed * radiusMultiplier + distr01(gen) * radiusMultiplier;
+		float radius = speed * radiusMultiplier + distr01(gen) * radiusMultiplier * 15.0f;
 		movc.angleDirection = glm::vec2(0.01f * speed + rand1, 0.01f * speed + rand2);
 		movc.goalAngle = glm::vec2(rand1 * 2.0f * glm::pi<float>(), rand2 * 2.0f * glm::pi<float>());
 		movc.prevAngle = movc.goalAngle;
@@ -218,7 +218,8 @@ export void InitAsteroidField(unsigned int asteroidCount)
 
 		ray.TextureSet = textureSelect;
 
-		WorldEntityManager->CreateEntityWithData(tc, movc, matrix, ray);
+		WorldEntityManager->CreateEntityWithData(tc, movc, ray);
 	}
 	tc.Position = glm::vec3(0, 0, 0);
+
 }

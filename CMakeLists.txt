@@ -10,6 +10,20 @@ add_compile_options(
     $<$<CONFIG:RelWithDebInfo>:/MTd>
     $<$<CONFIG:Release>:/MT>
 )
+# Enable instrincic
+add_compile_options(
+    $<$<CONFIG:>:/Oi>
+    $<$<CONFIG:Debug>:/Oi>
+    $<$<CONFIG:RelWithDebInfo>:/Oi>
+    $<$<CONFIG:Release>:/Oi>
+)
+# Enable Streaming SIMD Extensions 2 (X86) (/arch:SSE2)
+add_compile_options(
+    $<$<CONFIG:>:/arch:SSE2>
+    $<$<CONFIG:Debug>:/arch:SSE2>
+    $<$<CONFIG:RelWithDebInfo>:/arch:SSE2>
+    $<$<CONFIG:Release>:/arch:SSE2>
+)
 
 # Set the project (solution name)
 project(
@@ -19,40 +33,44 @@ project(
 	LANGUAGES CXX
 )
 
+#GLM options
+set (GLM_ENABLE_CXX_20 "Enable C++ 20" ON    CACHE    BOOL    "GLM"    FORCE) 
+set (FMT_MODULE    OFF    CACHE    BOOL    "FMT"    FORCE)
+
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/Engine")
 
 # Used sources
 list(APPEND EncosyGame_SRC
 	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Core/main.cppm"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Core/DemoCommon.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/CollisionDemo.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DynamicDemo.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DyingFollowerComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/DyingFollowerSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/LeaderComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/LeaderMovementSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SpawningSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SpawningSystemData.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/MovementComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerMovementSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SphereColliderComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/SphereCollisionSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/CollisionEventComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerModifySystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/FollowerKillingSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/Core/EncosyGame_DemoCommon.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/EncosyGame_CollisionDemo.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/EncosyGame_DynamicDemo.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Components_DyingFollowerComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Systems_DyingFollowerSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Components_FollowerComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Components_LeaderComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Systems_LeaderMovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Systems_SpawningSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_SystemData_SpawningSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Components_MovementComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Systems_FollowerMovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Components_SphereColliderComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Systems_SphereCollisionSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Components_CollisionEventComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Systems_FollowerModifySystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/CollisionDemos/Demo_Systems_FollowerKillingSystem.ixx"
 	
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/RotationTest.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementComponent.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/MovementSystemThreaded.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/EncosyGame_RotationTest.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/RotationTest_Components_MovementComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/RotationTest_Systems_MovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RotationTest/RotationTest_Systems_MovementSystemThreaded.ixx"
 
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StaticTest/StaticTest.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RaytracingTest/RaytracingTest.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/StaticTest/EncosyGame_StaticTest.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/RaytracingTest/EncosyGame_RaytracingTest.ixx"
 
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/AsteroidField.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/MovementSystem.ixx"
-	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/MovementComponent.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/EncosyGame_AsteroidField.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/AsteroidField_Systems_MovementSystem.ixx"
+	"${CMAKE_CURRENT_SOURCE_DIR}/Game/AsteroidField/AsteroidField_Components_MovementComponent.ixx"
 
 )
 # Used shaders, game

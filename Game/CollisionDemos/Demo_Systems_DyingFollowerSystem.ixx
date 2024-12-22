@@ -3,14 +3,14 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module Demo.Systems.DyingFollowerSystem;
+export module Demo_Systems_DyingFollowerSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
 
-import Components.TransformComponent;
-import Components.MaterialComponent;
-import Demo.Components.DyingFollowerComponent;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_MaterialComponent;
+import Demo_Components_DyingFollowerComponent;
 
 
 import <map>;
@@ -21,8 +21,6 @@ import <vector>;
 
 export class DyingFollowerSystem : public SystemThreaded
 {
-
-	friend class SystemManager;
 
 	SystemThreadedOptions ThreadedRunOptions =
 	{
@@ -37,7 +35,6 @@ public:
 	DyingFollowerSystem() {}
 	~DyingFollowerSystem() {}
 
-protected:
 
 	void Init() override
 	{
@@ -53,7 +50,7 @@ protected:
 	void Update(const int thread, const double deltaTime) override {	}
 	void UpdatePerEntity(const int thread, const double deltaTime, Entity entity, EntityType entityType) override
 	{
-		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponentComponents);
+		EE_TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponentComponents);
 		DyingFollowerComponent& dc = GetCurrentEntityComponent(thread, &ThreadDyingFollowerComponents);
 
 		dc.TimeToLive -= deltaTime;
@@ -91,9 +88,9 @@ protected:
 
 private:
 
-	WriteReadComponentStorage<TransformComponent> TransformComponents;
+	WriteReadComponentStorage<EE_TransformComponent> TransformComponents;
 	WriteReadComponentStorage<DyingFollowerComponent> DyingFollowerComponents;
 
-	ThreadComponentStorage<TransformComponent> ThreadTransformComponentComponents;
+	ThreadComponentStorage<EE_TransformComponent> ThreadTransformComponentComponents;
 	ThreadComponentStorage<DyingFollowerComponent> ThreadDyingFollowerComponents;
 };

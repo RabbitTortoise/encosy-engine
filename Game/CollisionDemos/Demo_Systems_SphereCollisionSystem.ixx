@@ -6,13 +6,13 @@ module;
 #include <glm/gtc/quaternion.hpp>	
 #include <fmt/core.h>
 
-export module Demo.Systems.SphereCollisionSystem;
+export module Demo_Systems_SphereCollisionSystem;
 
-import EncosyCore.Entity;
-import EncosyCore.SystemThreaded;
-import Components.TransformComponent;
-import Demo.Components.SphereColliderComponent;
-import Demo.Components.CollisionEventComponent;
+import EE_Encosy_Entity;
+import EE_Encosy_SystemThreaded;
+import EE_ECS_Components_TransformComponent;
+import Demo_Components_SphereColliderComponent;
+import Demo_Components_CollisionEventComponent;
 
 import <map>;
 import <span>;
@@ -24,8 +24,6 @@ import <functional>;
 
 export class SphereCollisionSystem : public SystemThreaded
 {
-	friend class SystemManager;
-
 
 	SystemThreadedOptions ThreadedRunOptions =
 	{
@@ -40,7 +38,6 @@ public:
 	SphereCollisionSystem() {}
 	~SphereCollisionSystem() {}
 
-protected:
 	void Init() override
 	{
 		Type = SystemType::PhysicsSystem;
@@ -62,7 +59,7 @@ protected:
 	{
 		SystemThreadInfo threadInfo = GetThreadRuntimeInfo(thread);
 
-		TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
+		EE_TransformComponent& tc = GetCurrentEntityComponent(thread, &ThreadTransformComponents);
 		const SphereColliderComponent sc = GetCurrentEntityComponent(thread, &SphereColliderComponents);
 		const float scaledRadius = sc.Radius * tc.Scale.x;
 
@@ -71,7 +68,7 @@ protected:
 			const auto& entityTypeVec = FetchedEntitiesInfo[outer];
 			for (size_t inner = threadInfo.innerIndexRead + 1; inner < TransformComponents.Storage[outer].size(); inner++)
 			{
-				TransformComponent& tcOther = TransformComponents.Storage[outer][inner];
+				EE_TransformComponent& tcOther = TransformComponents.Storage[outer][inner];
 				const auto& colliderOther = SphereColliderComponents.Storage[outer][inner];
 				const float scaledRadiusOther = colliderOther.Radius * tcOther.Scale.x;
 				const float collisionDistance = scaledRadius + scaledRadiusOther;
@@ -100,7 +97,7 @@ protected:
 					}
 					if (!sc.Unmovable)
 					{
-						TransformComponent& tcRef = TransformComponents.Storage[threadInfo.outerIndex][threadInfo.innerIndexRead];
+						EE_TransformComponent& tcRef = TransformComponents.Storage[threadInfo.outerIndex][threadInfo.innerIndexRead];
 						tcRef.Position += change;
 						//SetEntityComponent(entity, entityType, tc);  // This function is not thread safe yet
 					}
@@ -118,8 +115,8 @@ protected:
 	void Destroy() override {}
 
 private:
-	WriteReadComponentStorage<TransformComponent> TransformComponents;
+	WriteReadComponentStorage<EE_TransformComponent> TransformComponents;
 	ReadOnlyComponentStorage<SphereColliderComponent> SphereColliderComponents;
 
-	ThreadComponentStorage<TransformComponent> ThreadTransformComponents;
+	ThreadComponentStorage<EE_TransformComponent> ThreadTransformComponents;
 };

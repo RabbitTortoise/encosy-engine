@@ -5,6 +5,8 @@ module;
 #include <glm/gtc/quaternion.hpp>// Include quaternions
 #include <glm/gtx/quaternion.hpp>// Include quaternions
 
+#include "glm/gtx/type_aligned.hpp"
+
 export module EE_Core_MatrixCalculations;
 
 import EE_ECS_Components_TransformComponent;
@@ -50,7 +52,102 @@ export namespace MatrixCalculations
             * glm::scale(glm::mat4(1.0f), component.Scale);
     }
 
-    // Custom implementation of the LookAt function
+    glm::mat4 CalculateModelMatrixTest(const EE_TransformComponent& component)
+    {
+        
+        // Scale
+        glm::mat4 scaleMatResult = glm::mat4(
+            component.Scale[0], 0, 0, 0,
+            0, component.Scale[1], 0, 0,
+            0, 0, component.Scale[2], 0,
+            0, 0, 0, 1);
+
+        // Translate
+        glm::vec4 translateX = glm::vec4(component.Position[0]);
+        glm::vec4 translateY = glm::vec4(component.Position[1]);
+        glm::vec4 translateZ = glm::vec4(component.Position[2]);
+        glm::mat4 translateResult;
+        glm::mat4 orientationResult;
+
+        glm::mat4 m = glm::mat4(1.0f);
+        translateResult = m;
+
+        const __m128& mulVecX = _mm_load_ps(reinterpret_cast<const float*>(&translateX));
+        const __m128& mulVecY = _mm_load_ps(reinterpret_cast<const float*>(&translateY));
+        const __m128& mulVecZ = _mm_load_ps(reinterpret_cast<const float*>(&translateZ));
+        const __m128& mulMat0 = _mm_load_ps(reinterpret_cast<const float*>(&m[0]));
+        const __m128& mulMat1 = _mm_load_ps(reinterpret_cast<const float*>(&m[1]));
+        const __m128& mulMat2 = _mm_load_ps(reinterpret_cast<const float*>(&m[2]));
+
+        __m128 result0 = _mm_mul_ps(mulMat0, mulVecX);
+        __m128 result1 = _mm_mul_ps(mulMat1, mulVecY);
+        __m128 result2 = _mm_mul_ps(mulMat2, mulVecZ);
+
+        glm::vec4 r0 = reinterpret_cast<glm::vec4&>(result0);
+        glm::vec4 r1 = reinterpret_cast<glm::vec4&>(result1);
+        glm::vec4 r2 = reinterpret_cast<glm::vec4&>(result2);
+
+        glm::vec4 total = r0 + r1 + r2 + m[3];
+
+        translateResult[3] = total;
+
+        // Quat to mat4
+        //glm::mat4 orientationResult = glm::mat3_cast(component.Orientation);
+
+
+
+        glm::mat3 orientationMat3 = glm::mat3(1.0f);
+        glm::quat q = component.Orientation;
+
+        float results[9] = {};
+
+        float mult1[8] = { q.x, q.y, q.z, q.x, q.x, q.y, q.w, q.w };
+        float mult2[8] = { q.x, q.y, q.z, q.z, q.y, q.z, q.x, q.y };
+        const __m256& multVec1 = _mm256_load_ps(mult1);
+        const __m256& multVec2 = _mm256_load_ps(mult2);
+        __m256 resultMult = _mm256_mul_ps(multVec1, multVec2);
+        _mm256_store_ps(results, resultMult);
+
+        results[8] = (q.w * q.z);
+
+        
+        //float qxx(q.x * q.x);  multResult07[0]
+        ///float qyy(q.y * q.y);  multResult07[1]
+        //float qzz(q.z * q.z);  multResult07[2]
+        //float qxz(q.x * q.z);  multResult07[3]
+        //float qxy(q.x * q.y);  multResult07[4]
+        //float qyz(q.y * q.z);  multResult07[5]
+        //float qwx(q.w * q.x);  multResult07[6]
+        //float qwy(q.w * q.y);  multResult07[7]
+        //float qwz(q.w * q.z);  multResult8
+        
+
+        orientationMat3[0][0] = 1.0f - 2.0f * (results[1] + results[2]);
+        orientationMat3[0][1] = 2.0f * (results[4] + results[8] );
+        orientationMat3[0][2] = 2.0f * (results[3] - results[7]);
+
+        orientationMat3[1][0] = 2.0f * (results[4] - results[8]);
+        orientationMat3[1][1] = 1.0f - 2.0f * (results[0] + results[2]);
+        orientationMat3[1][2] = 2.0f * (results[5] + results[6]);
+
+        orientationMat3[2][0] = 2.0f * (results[3] + results[7]);
+        orientationMat3[2][1] = 2.0f * (results[5] - results[6]);
+        orientationMat3[2][2] = 1.0f - 2.0f * (results[0] + results[1]);
+
+        const __m128& quat = _mm_load_ps(reinterpret_cast<const float*>(&component.Orientation));
+
+        orientationResult = glm::mat4(orientationMat3);
+
+
+        return
+            translateResult
+            * orientationResult
+            * scaleMatResult;
+    }
+
+
+
+	// Custom implementation of the LookAt function
     glm::mat4 CalculateLookAtMatrix(glm::vec3 position, glm::vec3 target, glm::vec3 worldUp)
     {
         // 1. Position = known

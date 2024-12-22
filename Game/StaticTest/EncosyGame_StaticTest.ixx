@@ -2,26 +2,24 @@ module;
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
 
-export module EncosyGame.RotationTest;
+export module EncosyGame_StaticTest;
 
-import EncosyEngine.Interface;
-import EncosyEngine.EncosyCore;
-import EncosyEngine.RenderCore;
+import EncosyEngine_EngineCore;
+import EncosyEngine_EncosyCore;
+import EncosyEngine_RenderCore;
+import EE_Core_MatrixCalculations;
 
-import Components.TransformComponent;
-import Components.MaterialComponent;
-import Components.ModelMatrixComponent;
+import EE_ECS_Components_TransformComponent;
+import EE_ECS_Components_MaterialComponent;
+import EE_ECS_Components_ModelMatrixComponent;
+import EE_ECS_Components_StaticComponent;
 
-import StressTest.Components.MovementComponent;
-import StressTest.Systems.MovementSystem;
-import StressTest.Systems.MovementSystemThreaded;
+import EE_RenderCore_MeshLoader;
+import EE_RenderCore_TextureLoader;
+import EE_RenderCore_RenderPipelineManager;
+import EE_RenderCore_VulkanTypes;
 
-import RenderCore.MeshLoader;
-import RenderCore.TextureLoader;
-import RenderCore.RenderPipelineManager;
-import RenderCore.VulkanTypes;
-
-import EncosyGame.DemoCommon;
+import EncosyGame_DemoCommon;
 
 import <map>;
 import <vector>;
@@ -35,24 +33,13 @@ import <span>;
 import <typeindex>;
 import <typeinfo>;
 
-
 float RandomNumber0_1()
 {
 	return (static_cast <float> (rand()) / static_cast <float> (RAND_MAX));
 }
 
-glm::vec3 RandDir()
-{
-	return { RandomNumber0_1() + 0.01f,RandomNumber0_1() + 0.01f ,RandomNumber0_1() + 0.01f };
-}
 
-float RandSpeed()
-{
-	return (RandomNumber0_1() * 20.0f + 5.0f);
-}
-
-
-export void InitRotationTest(int testDimensionsX, int testDimensionsY, int testDimensionsZ)
+export void InitStaticTest(int testDimensionsX, int testDimensionsY, int testDimensionsZ)
 {
 	auto EngineCore = EncosyEngine::GetEncosyCore();
 	auto PrimaryWorld = EngineCore->GetPrimaryWorld();
@@ -66,23 +53,19 @@ export void InitRotationTest(int testDimensionsX, int testDimensionsY, int testD
 	auto MainMeshLoader = EngineRenderCore->GetMeshLoader();
 	auto MainRenderPipelineManager = EngineRenderCore->GetRenderPipelineManager();
 
-
-	// Movement System
-	WorldSystemManager->AddSystem<MovementSystemThreaded>("MovementSystem");
-
 	// Textures
 	std::vector<PBRTextureSet> textureSets;
 	std::vector<TextureSetID> textureSetIDs;
 	CreateTextures(MainTextureLoader, EngineRenderCore, textureSets, textureSetIDs);
+
 	std::vector<MeshID> meshIDs;
 	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Cube));
-	//meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere));
-	//meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Torus));
+	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Sphere));
+	meshIDs.push_back(MainMeshLoader->GetEngineMeshID(EngineMesh::Torus));
 
-	ModelMatrixComponent matrix = {};
-	TransformComponent tc = {};
-	MovementComponent movc = {};
-	MaterialComponentRaytracing mcRay = {};
+	EE_TransformComponent tc = {};
+	EE_StaticComponent stat = {};
+	EE_MaterialComponent mcRay = {};
 
 	float dist = 2.0f;
 
@@ -101,8 +84,6 @@ export void InitRotationTest(int testDimensionsX, int testDimensionsY, int testD
 			zCur = zStart;
 			for (size_t z = 0; z < testDimensionsZ; z++)
 			{
-				glm::vec3 dir = RandDir();
-				float speed = RandSpeed();
 
 				float rand1 = RandomNumber0_1();
 				float rand2 = RandomNumber0_1();
@@ -110,22 +91,18 @@ export void InitRotationTest(int testDimensionsX, int testDimensionsY, int testD
 				int meshSelect = std::round(rand2 * (meshIDs.size() - 1));
 
 				MeshID usedMeshId = meshIDs[meshSelect];
-
 				tc = {
 					.Position = glm::vec3(xCur,yCur,zCur),
 					.Scale = glm::vec3(0.75,0.75,0.75),
 					.Orientation = glm::quat(glm::vec3(0,0,0)),
 				};
-				movc = {
-					.Direction = dir,
-					.Speed = speed
-				};
+
 				mcRay.TextureSet = textureSelect;
 				mcRay.RenderMesh = usedMeshId;
 				mcRay.TextureRepeat = 1.0f;
 				mcRay.Color = glm::vec3(1, 1, 1);
 
-				WorldEntityManager->CreateEntityWithData(tc, mcRay, movc, matrix);
+				WorldEntityManager->CreateEntityWithData(tc, mcRay, stat);
 
 				zCur -= dist;
 			}
