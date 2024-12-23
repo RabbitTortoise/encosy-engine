@@ -19,14 +19,16 @@ export class EncosyCore
 {
 
 public:
-	EncosyCore() 
-	{ 
-		PrimaryWorld = std::make_unique<EncosyWorld>(); 
+	EncosyCore() {}
+	~EncosyCore() { PrimaryWorld.reset(); }
+
+	void Init() 
+	{
+		PrimaryWorld = std::make_unique<EncosyWorld>();
 		PrimaryWorldComponentManager = PrimaryWorld->GetWorldComponentManager();
 		PrimaryWorldEntityManager = PrimaryWorld->GetWorldEntityManager();
 		PrimaryWorldSystemManager = PrimaryWorld->GetWorldSystemManager();
 	}
-	~EncosyCore() { PrimaryWorld.reset(); }
 
 	void InitCoreSystems(RenderCore* renderCore)
 	{

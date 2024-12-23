@@ -23,14 +23,18 @@ export class TextureLoader
 
 public:
 
-	TextureLoader(AllocationHandler* allocationHandler) : vkAllocationHandler(allocationHandler) 
+	TextureLoader() {}
+	~TextureLoader() {}
+
+	void Init(AllocationHandler* allocationHandler)
 	{
+		vkAllocationHandler = allocationHandler;
+
 		std::wstring path = std::filesystem::current_path().native();;
 		//fmt::println(L"Initializing TextureLoader: Current working directory: {}", path);
-	
+
 		InitEngineTextures();
 	}
-	~TextureLoader() {}
 
 	TextureID GetEngineTextureID(EngineTextures texture)
 	{
@@ -184,7 +188,7 @@ private:
 	std::vector<AllocatedImage> TextureHandles;
 	std::map<std::string, TextureID> TextureList;
 
-	AllocationHandler* vkAllocationHandler;
+	AllocationHandler* vkAllocationHandler = nullptr;
 
 	std::string TextureResourceFolder = "Game/Resources/Textures/";
 };

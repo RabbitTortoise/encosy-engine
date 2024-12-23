@@ -57,13 +57,15 @@ export class RenderPipelineManager
 
 public:
 
-	RenderPipelineManager(ShaderLoader* shaderLoader, RenderCoreResources* resources, RaytracingResources* rtResources) :
-	MainShaderLoader(shaderLoader),
-	CoreResources(resources),
-	RtResources(rtResources)
-	{}
+	RenderPipelineManager() {}
 	~RenderPipelineManager() {}
 
+	void Init(ShaderLoader* shaderLoader, RenderCoreResources* resources, RaytracingResources* rtResources)
+	{
+		MainShaderLoader = shaderLoader;
+		CoreResources = resources;
+		RtResources = rtResources;
+	}
 
 	RenderPipelineID GetEngineRenderPipelineID(EngineRenderPipelines pipeline)
 	{
@@ -351,7 +353,7 @@ protected:
 
 	DeletionQueue PipelinesDeletionQueue;
 
-	ShaderLoader* MainShaderLoader;
-	RenderCoreResources* CoreResources;
-	RaytracingResources* RtResources;
+	ShaderLoader* MainShaderLoader = nullptr;
+	RenderCoreResources* CoreResources = nullptr;
+	RaytracingResources* RtResources = nullptr;
 };

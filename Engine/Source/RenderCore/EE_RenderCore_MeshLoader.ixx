@@ -28,14 +28,17 @@ export class MeshLoader
 
 public:
 
-	MeshLoader(AllocationHandler* allocationHandler) : vkAllocationHandler(allocationHandler) 
+	MeshLoader() {}
+	~MeshLoader() {}
+
+	void Init(AllocationHandler* allocationHandler)
 	{
+		vkAllocationHandler = allocationHandler;
 		std::wstring path = std::filesystem::current_path().native();
 		//fmt::println(L"Initializing MeshLoader: Current working directory: {}", path);
 
 		InitPrimitives();
 	}
-	~MeshLoader() {}
 
 	void InitPrimitives()
 	{

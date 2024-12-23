@@ -18,11 +18,13 @@ export
 class VulkanImgui
 {
 public:
-	VulkanImgui(RenderCoreResources* resources)
+	VulkanImgui() {}
+	~VulkanImgui() {}
+
+	void Init(RenderCoreResources* resources)
 	{
 		Resources = resources;
 	}
-	~VulkanImgui() {}
 
 
 	void InitImgui(int minAlloctionSize)

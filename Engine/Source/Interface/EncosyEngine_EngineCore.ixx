@@ -32,6 +32,6 @@ export namespace EncosyEngine
         EngineCoreObject->EngineLoop();
     }
 
-    EncosyCore* GetEncosyCore() { return EngineCoreObject->GetEncosyCore(); }
-    RenderCore* GetRenderCore() { return EngineCoreObject->GetRenderCore(); }
+    EncosyCore* GetEncosyCore() { return EngineCoreObject->GetEncosyCorePtr(); }
+    RenderCore* GetRenderCore() { return EngineCoreObject->GetRenderCorePtr(); }
 }

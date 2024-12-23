@@ -19,7 +19,11 @@ import <string>;
 export class EngineCore
 {
 public:
-    EngineCore() { }
+    EngineCore() 
+    {
+        EngineEncosyCore = std::make_unique<EncosyCore>();
+        EngineRenderCore = std::make_unique<RenderCore>();
+    }
     ~EngineCore() { }
 
     void EngineInit(std::string title, bool fullscreen, int width, int height)
@@ -35,12 +39,13 @@ public:
 
         // Setup EncosyCore
         fmt::println("EncosyCore Initialization");
-        EngineEncosyCore = std::make_unique<EncosyCore>();
+        EngineEncosyCore->Init();
+        //EngineEncosyCore = std::make_unique<EncosyCore>();
         PrimaryWorld = EngineEncosyCore->GetPrimaryWorld();
 
         // Setup RenderCore
         fmt::println("RenderCore Initialization");
-        EngineRenderCore = std::make_unique<RenderCore>();
+        //EngineRenderCore = std::make_unique<RenderCore>();
         EngineRenderCore->InitializeVulkan(PrimaryWorld);
 
         // Initialize Engine systems.
@@ -172,8 +177,8 @@ public:
         }
     }
 
-    EncosyCore* GetEncosyCore() { return EngineEncosyCore.get(); }
-    RenderCore* GetRenderCore() { return EngineRenderCore.get(); }
+    EncosyCore* GetEncosyCorePtr() { return EngineEncosyCore.get(); }
+    RenderCore* GetRenderCorePtr() { return EngineRenderCore.get(); }
 
 private:
     // Update framerates

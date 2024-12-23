@@ -59,7 +59,16 @@ export class RenderCore
 
 public:
 
-	RenderCore(){}
+	RenderCore()
+	{
+		MainAllocationHandler = std::make_unique<AllocationHandler>();
+		MainMeshLoader = std::make_unique<MeshLoader>();
+		MainTextureLoader = std::make_unique<TextureLoader>();
+		MainShaderLoader = std::make_unique<ShaderLoader>();
+		MainRenderPipelineManager = std::make_unique<RenderPipelineManager>();
+		MainVulkanRaytracing = std::make_unique<VulkanRaytracing>();
+		MainVulkanImgui = std::make_unique<VulkanImgui>();
+	}
 	~RenderCore(){}
 
 	MeshLoader* GetMeshLoader() { return MainMeshLoader.get(); }
@@ -256,16 +265,17 @@ public:
 
 	void InitAllocationHandler()
 	{
-		MainAllocationHandler = std::make_unique<AllocationHandler>(&Resources, &RtResources);
+
+		MainAllocationHandler->Init(&Resources, &RtResources);
 	}
 
 	void InitSubSystems()
 	{
-		MainMeshLoader = std::make_unique<MeshLoader>(MainAllocationHandler.get());
-		MainTextureLoader = std::make_unique<TextureLoader>(MainAllocationHandler.get());
-		MainShaderLoader = std::make_unique<ShaderLoader>(MainAllocationHandler.get(), &Resources);
-		MainRenderPipelineManager = std::make_unique<RenderPipelineManager>(MainShaderLoader.get(), &Resources, &RtResources);
-		MainVulkanRaytracing = std::make_unique<VulkanRaytracing>(&Resources, &RtResources, MainAllocationHandler.get(), MainMeshLoader.get(), MainTextureLoader.get(), MainRenderPipelineManager.get());
+		MainMeshLoader->Init(MainAllocationHandler.get());
+		MainTextureLoader->Init(MainAllocationHandler.get());
+		MainShaderLoader->Init(MainAllocationHandler.get(), &Resources);
+		MainRenderPipelineManager->Init(MainShaderLoader.get(), &Resources, &RtResources);
+		MainVulkanRaytracing->Init(&Resources, &RtResources, MainAllocationHandler.get(), MainMeshLoader.get(), MainTextureLoader.get(), MainRenderPipelineManager.get());
 	}
 
 	void CreateDrawImages()
@@ -454,7 +464,7 @@ public:
 
 	void InitImgui()
 	{
-		MainVulkanImgui = std::make_unique<VulkanImgui>(&Resources);
+		MainVulkanImgui->Init(&Resources);
 		MainVulkanImgui->InitImgui(RtResources.EmProperties.minImportedHostPointerAlignment);
 	}
 	
@@ -757,7 +767,7 @@ public:
 	// Class specific
 	DeletionQueue MainDeletionQueue;
 	DescriptorAllocator DrawDescriptorAllocator;
-	EncosyWorld* MainWorld;
+	EncosyWorld* MainWorld = nullptr;
 
 	// Sharable resources
 	RenderCoreResources Resources;
@@ -768,8 +778,8 @@ public:
 
 	RenderThread MainRenderThread;
 	std::stop_source StopSource;
-	std::barrier<>* StartBarrier;
-	std::barrier<>* FinishBarrier;
+	std::barrier<>* StartBarrier = nullptr;
+	std::barrier<>* FinishBarrier = nullptr;
 
 	std::mutex SwapchainMutex;
 };

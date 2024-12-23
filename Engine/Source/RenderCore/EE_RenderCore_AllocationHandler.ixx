@@ -31,7 +31,10 @@ export class AllocationHandler
 {
 
 public:
-	AllocationHandler(RenderCoreResources* resources, RaytracingResources* rtResources)
+	AllocationHandler() {}
+	~AllocationHandler() { Cleanup(); }
+
+	void Init(RenderCoreResources* resources, RaytracingResources* rtResources)
 	{
 		CoreResources = resources;
 		RtResources = rtResources;
@@ -57,7 +60,6 @@ public:
 			vmaDestroyAllocator(vmaAllocator);
 			});
 	}
-	~AllocationHandler() { Cleanup(); }
 
 	void Cleanup()
 	{
@@ -547,8 +549,8 @@ public:
 	VmaAllocator GetVmaAllocator() const { return vmaAllocator; };
 
 private:
-	RenderCoreResources* CoreResources;
-	RaytracingResources* RtResources;
+	RenderCoreResources* CoreResources = nullptr;;
+	RaytracingResources* RtResources = nullptr;;
 	VmaAllocator vmaAllocator;
 
 	// Needed vulkan handles

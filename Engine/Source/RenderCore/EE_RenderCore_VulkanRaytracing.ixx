@@ -14,11 +14,9 @@ import EE_RenderCore_Resources;
 import EE_RenderCore_RaytracingResources;
 import EE_RenderCore_AllocationHandler;
 import EE_RenderCore_RenderPipelineManager;
+
 import <vector>;
 import <deque>;
-
-
-
 
 
 export
@@ -33,7 +31,10 @@ public:
 	VkPhysicalDeviceAccelerationStructureFeaturesKHR enabledAccelerationStructureFeatures{};
 
 
-	VulkanRaytracing(RenderCoreResources* resources, RaytracingResources* rtResources, AllocationHandler* allocationHandler, MeshLoader* meshLoader, TextureLoader* mainTextureLoader, RenderPipelineManager* pipelineManager)
+	VulkanRaytracing(){}
+	~VulkanRaytracing(){};
+
+	void Init(RenderCoreResources* resources, RaytracingResources* rtResources, AllocationHandler* allocationHandler, MeshLoader* meshLoader, TextureLoader* mainTextureLoader, RenderPipelineManager* pipelineManager)
 	{
 		RtResources = rtResources;
 		MainMeshLoader = meshLoader;
@@ -42,8 +43,6 @@ public:
 		MainAllocationHandler = allocationHandler;
 		MainRenderPipelineManager = pipelineManager;
 	}
-	~VulkanRaytracing(){};
-
 
 	void InitRayTracing()
 	{
@@ -420,10 +419,10 @@ private:
 	std::vector<PBRTextureSet> RegisteredTextureSets;
 	std::vector<MeshID> RegisteredMeshes;
 
-	RenderPipelineManager* MainRenderPipelineManager;
-	MeshLoader* MainMeshLoader;
-	TextureLoader* MainTextureLoader;
-	RaytracingResources* RtResources;
-	RenderCoreResources* CoreResources;
-	AllocationHandler* MainAllocationHandler;
+	RenderPipelineManager* MainRenderPipelineManager = nullptr;
+	MeshLoader* MainMeshLoader = nullptr;
+	TextureLoader* MainTextureLoader = nullptr;
+	RaytracingResources* RtResources = nullptr;
+	RenderCoreResources* CoreResources = nullptr;
+	AllocationHandler* MainAllocationHandler = nullptr;
 };

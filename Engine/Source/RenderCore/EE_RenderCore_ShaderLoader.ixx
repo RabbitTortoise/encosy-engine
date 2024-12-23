@@ -23,15 +23,20 @@ export class ShaderLoader
 {
 public:
 
-	ShaderLoader(AllocationHandler* allocationHandler, RenderCoreResources* resources) : Resources(resources), vkAllocationHandler(allocationHandler)
+	ShaderLoader() {}
+
+	~ShaderLoader() {}
+
+	void Init(AllocationHandler* allocationHandler, RenderCoreResources* resources)
 	{
+		vkAllocationHandler = allocationHandler;
+		Resources = resources;
+
 		std::wstring path = std::filesystem::current_path().native();;
 		//fmt::println(L"Initializing ShaderLoader: Current working directory: {}",  path);
 
 		InitEngineShaders();
 	}
-
-	~ShaderLoader() {}
 
 	ShaderID GetEngineComputeShaderId(EngineComputeShaders shader)
 	{
@@ -214,8 +219,8 @@ private:
 	std::map<std::string, ShaderID> ShaderList;
 	std::map<std::string, ShaderID> RaytracingShaderList;
 
-	RenderCoreResources* Resources;
-	AllocationHandler* vkAllocationHandler;
+	RenderCoreResources* Resources = nullptr;
+	AllocationHandler* vkAllocationHandler = nullptr;
 
 	std::string ShaderResourceFolder = "Game/Resources/Shaders/";
 };
